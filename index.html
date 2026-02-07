@@ -1289,12 +1289,7 @@
         <input type="text" id="command-input" placeholder="Escribe un comando..." autocomplete="off">
     </div>
 
-    <script>
-        window.onerror = function (msg, url, lineNo, columnNo, error) {
-            alert("Error Critico: " + msg + "\nLinea: " + lineNo);
-            return false;
-        };
-    </script>
+
     <script>
         const viewport = document.getElementById('viewport');
         const layer = document.getElementById('scene-layer');
@@ -1304,6 +1299,99 @@
         const hitboxesContainer = document.getElementById('hitboxes-container');
         const pathCanvas = document.getElementById('path-canvas');
         const ctx = pathCanvas.getContext('2d');
+
+        // --- Game State Variables (Moved to Top) ---
+        function getDynamicCenterPos() {
+            const width = 225;
+            const left = (window.innerWidth - width) / 2;
+            const top = (window.innerHeight - 350) / 2;
+
+            return {
+                top: Math.max(20, Math.round(top)),
+                left: Math.max(20, Math.round(left)),
+                width: width
+            };
+        }
+
+        let tabletPositions = {};
+
+        function getMesaTabletPos(wpIndex) {
+            return tabletPositions[wpIndex] || getDynamicCenterPos();
+        }
+
+        let currentEditingMesa = "0";
+        let activeTabletMesaIndex = null;
+        let isProducing = false;
+        let isPendingSale = false;
+
+        let playerMoney = 0; // Start money
+        let inventory = {
+            wheels: 0,
+            axles: 0,
+            decks: 0,
+            skateboards: 0
+        };
+
+        const mesaConfig = {
+            "4": { name: "Mesa de Ruedas", time: 1000, type: "wheels", reward: 1, reqs: null },
+            "5": { name: "Mesa de Ejes", time: 2000, type: "axles", reward: 1, reqs: null },
+            "6": { name: "Mesa de Tablas", time: 4000, type: "decks", reward: 1, reqs: null },
+            "0": {
+                name: "Mesa de Ensamblaje",
+                time: 5000,
+                type: "skateboards",
+                reward: 1,
+                reqs: { wheels: 4, axles: 2, decks: 1 }
+            }
+        };
+
+        // Upgrade state per mesa index
+        let mesaUpgrades = {
+            "0": 0, "4": 0, "5": 0, "6": 0
+        };
+
+        let mesaMoldUpgrades = {
+            "0": 0, "4": 0, "5": 0, "6": 0
+        };
+
+        let mesaEmployees = {
+            "0": false, "4": false, "5": false, "6": false
+        };
+
+        let mesaEmployeeTraining = {
+            "0": 0, "4": 0, "5": 0, "6": 0
+        };
+
+        let mesaAccumulation = {
+            "0": 0, "4": 0, "5": 0, "6": 0
+        };
+
+        let accumulationLabelPositions = {
+            "0": { top: "56%", left: "41%" },
+            "4": { top: "39%", left: "62%" },
+            "5": { top: "42%", left: "73%" },
+            "6": { top: "47%", left: "83%" }
+        };
+
+        const getUpgradeCost = (lvl) => 10 * Math.pow(2, lvl);
+        const getMoldUpgradeCost = (lvl) => 500 * Math.pow(2, lvl);
+        const getHireCost = () => 1000;
+        const getTrainingCost = (lvl) => 1000 * Math.pow(2, lvl);
+
+        const getEmployeeEfficiency = (lvl) => {
+            // Level 0: 4x, Lvl 1: 3x, Lvl 2: 2x, Lvl 3: 1.5x, Lvl 4+: 1x
+            if (lvl === 0) return 4;
+            if (lvl === 1) return 3;
+            if (lvl === 2) return 2;
+            if (lvl === 3) return 1.5;
+            return 1;
+        };
+        const getProductionTime = (wpIndex) => {
+            const baseTime = mesaConfig[wpIndex].time;
+            const lvl = mesaUpgrades[wpIndex] || 0;
+            // 10% improvement per level: time = base / (1.10^lvl)
+            return baseTime / Math.pow(1.10, lvl);
+        };
 
         // Waypoints with special functions (circular: 8 connects to 1)
         const waypoints = [
@@ -1700,6 +1788,7 @@
         const saveMenu = document.getElementById('save-menu');
         const btnSaveGame = document.getElementById('btn-save-game');
         const btnCloseSave = document.getElementById('close-save-menu');
+        const saveListEl = document.getElementById('save-list');
         const employeeMenu = document.getElementById('employee-menu');
         const closeEmployeeMenu = document.getElementById('close-employee-menu');
         const newHudIcon = document.getElementById('new-hud-icon');
@@ -1713,98 +1802,9 @@
         let isDraggingHud = false;
         let dragTarget = null;
 
-        // Saved custom positions per mesa (index matches hitboxData/waypoints)
-        let tabletPositions = {};
 
-        function getDynamicCenterPos() {
-            const width = 225;
-            const left = (window.innerWidth - width) / 2;
-            const top = (window.innerHeight - 350) / 2;
 
-            return {
-                top: Math.max(20, Math.round(top)),
-                left: Math.max(20, Math.round(left)),
-                width: width
-            };
-        }
 
-        function getMesaTabletPos(wpIndex) {
-            return tabletPositions[wpIndex] || getDynamicCenterPos();
-        }
-
-        let currentEditingMesa = "0";
-        let activeTabletMesaIndex = null;
-        let isProducing = false;
-        let isPendingSale = false;
-
-        let playerMoney = 0; // Start money
-        let inventory = {
-            wheels: 0,
-            axles: 0,
-            decks: 0,
-            skateboards: 0
-        };
-
-        const mesaConfig = {
-            "4": { name: "Mesa de Ruedas", time: 1000, type: "wheels", reward: 1, reqs: null },
-            "5": { name: "Mesa de Ejes", time: 2000, type: "axles", reward: 1, reqs: null },
-            "6": { name: "Mesa de Tablas", time: 4000, type: "decks", reward: 1, reqs: null },
-            "0": {
-                name: "Mesa de Ensamblaje",
-                time: 5000,
-                type: "skateboards",
-                reward: 1,
-                reqs: { wheels: 4, axles: 2, decks: 1 }
-            }
-        };
-
-        // Upgrade state per mesa index
-        let mesaUpgrades = {
-            "0": 0, "4": 0, "5": 0, "6": 0
-        };
-
-        let mesaMoldUpgrades = {
-            "0": 0, "4": 0, "5": 0, "6": 0
-        };
-
-        let mesaEmployees = {
-            "0": false, "4": false, "5": false, "6": false
-        };
-
-        let mesaEmployeeTraining = {
-            "0": 0, "4": 0, "5": 0, "6": 0
-        };
-
-        let mesaAccumulation = {
-            "0": 0, "4": 0, "5": 0, "6": 0
-        };
-
-        let accumulationLabelPositions = {
-            "0": { top: "56%", left: "41%" },
-            "4": { top: "39%", left: "62%" },
-            "5": { top: "42%", left: "73%" },
-            "6": { top: "47%", left: "83%" }
-        };
-
-        const getUpgradeCost = (lvl) => 10 * Math.pow(2, lvl);
-        const getMoldUpgradeCost = (lvl) => 500 * Math.pow(2, lvl);
-        const getHireCost = () => 1000;
-        const getTrainingCost = (lvl) => 1000 * Math.pow(2, lvl);
-
-        const getEmployeeEfficiency = (lvl) => {
-            // Level 0: 4x, Lvl 1: 3x, Lvl 2: 2x, Lvl 3: 1.5x, Lvl 4+: 1x
-            if (lvl === 0) return 4;
-            if (lvl === 1) return 3;
-            if (lvl === 2) return 2;
-            if (lvl === 3) return 1.5;
-            return 1;
-        };
-        const getProductionTime = (wpIndex) => {
-            const baseTime = mesaConfig[wpIndex].time;
-            const lvl = mesaUpgrades[wpIndex] || 0;
-            // 0.5% improvement per level: time = base / (1.005^lvl)
-            return baseTime / Math.pow(1.005, lvl);
-        };
 
         const mesaTitleEl = document.getElementById('mesa-title');
         const tabletStatusEl = document.getElementById('tablet-status');
@@ -1992,6 +1992,7 @@
             setTimeout(() => {
                 // Ensure we use the captured index so production finishes even if tablet closes
                 executeProduction(targetMesa);
+                isProducing = false;
 
                 // Only update tablet UI if it's strictly the same mesa open
                 if (activeTabletMesaIndex === targetMesa) {
@@ -2001,8 +2002,6 @@
                     updateUpgradeUI();
                     tabletStatusEl.textContent = config.reqs ? "Listo para ensamblar" : "Listo para fabricar";
                 }
-
-                isProducing = false;
             }, prodTime);
         });
 
@@ -2090,7 +2089,9 @@
                         showTabletStatusNotification("Ayudante Contratado");
                         startAutomationForMesa(id);
                     }
-                };
+                }
+
+
 
                 btnTrain.onclick = () => {
                     if (playerMoney >= trainCost) {
@@ -2102,6 +2103,28 @@
                     }
                 };
             });
+        }
+
+        function toggleSaveMenu() {
+            if (!saveMenu) return;
+            if (saveMenu.style.display === 'block') {
+                saveMenu.style.display = 'none';
+            } else {
+                saveMenu.style.display = 'block';
+                if (employeeMenu) employeeMenu.style.display = 'none'; // Close other
+                refreshSaveList();
+            }
+        }
+
+        function toggleEmployeeMenu() {
+            if (!employeeMenu) return;
+            if (employeeMenu.style.display === 'block') {
+                employeeMenu.style.display = 'none';
+            } else {
+                employeeMenu.style.display = 'block';
+                if (saveMenu) saveMenu.style.display = 'none'; // Close other
+                updateEmployeeUI();
+            }
         }
 
         let mesaAutomationIntervals = {};
