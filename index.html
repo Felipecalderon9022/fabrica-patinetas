@@ -1,0 +1,2862 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Taller Interactivo</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: white;
+            user-select: none;
+            font-family: Arial, sans-serif;
+        }
+
+        #viewport {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            cursor: grab;
+            position: relative;
+            touch-action: none;
+        }
+
+        #viewport:active {
+            cursor: grabbing;
+        }
+
+        #scene-layer {
+            position: absolute;
+            transform-origin: 0 0;
+            visibility: hidden;
+        }
+
+        #background-image {
+            display: block;
+            pointer-events: none;
+        }
+
+        .scene-object {
+            position: absolute;
+            height: auto;
+            pointer-events: none;
+            filter: drop-shadow(5px 5px 5px rgba(0, 0, 0, 0.5));
+        }
+
+        .table-image {
+            width: 15%;
+        }
+
+        .machine {
+            width: 8%;
+            z-index: 20;
+        }
+
+        #new-object {
+            width: 6%;
+            z-index: 25;
+        }
+
+        #character {
+            width: 10%;
+            position: absolute;
+            z-index: 30;
+            pointer-events: none;
+            transition: none;
+            transform-origin: bottom center;
+            transform: translate(-50%, -100%);
+        }
+
+        /* Hitbox overlay - INVISIBLE */
+        .hitbox {
+            position: absolute;
+            border: none;
+            background: transparent;
+            z-index: 40;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        .hitbox:hover {
+            background: rgba(255, 255, 0, 0.1);
+        }
+
+        /* Waypoint markers - INVISIBLE */
+        .waypoint {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 15;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: transparent;
+            font-size: 11px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .waypoint.current {
+            background: transparent;
+            border-color: transparent;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+            }
+
+            50% {
+                transform: translate(-50%, -50%) scale(1.15);
+            }
+        }
+
+        /* Waypoint path line - INVISIBLE */
+        #path-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 14;
+            display: none;
+        }
+
+        /* HUD Elements - Fixed position */
+        #hud-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        #money-counter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 200px;
+            height: auto;
+            pointer-events: none;
+            filter: drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.5));
+        }
+
+        .money-display {
+            position: absolute;
+            top: 48px;
+            right: 65px;
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2em;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 101;
+            text-shadow: 0 0 5px #0ff;
+        }
+
+        #money-counter.editable {
+            border: 2px dashed #0ff;
+            pointer-events: auto;
+            cursor: move;
+        }
+
+        #save-icon {
+            position: absolute;
+            top: 20px;
+            right: 230px;
+            width: 40px;
+            height: auto;
+            pointer-events: auto;
+            cursor: pointer;
+            filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.5));
+            transition: transform 0.2s;
+        }
+
+        #save-icon:hover {
+            transform: scale(1.1);
+        }
+
+        #save-icon.editable {
+            border: 2px dashed #0ff;
+            cursor: move;
+        }
+
+        #sell-button {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 150px;
+            height: auto;
+            pointer-events: auto;
+            cursor: pointer;
+            filter: drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.5));
+            transition: transform 0.1s;
+        }
+
+        #sell-button:hover {
+            transform: scale(1.05);
+        }
+
+        #sell-button.editable {
+            border: 2px dashed #0ff;
+            cursor: move;
+        }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 768px) {
+            #sell-button {
+                bottom: 80px !important;
+                /* Move it up above mobile browser bars */
+                right: 50% !important;
+                left: auto !important;
+                transform: translateX(50%) !important;
+                /* Center it - note: right: 50% + translateX(50%) centers it */
+                width: 140px;
+            }
+
+            #command-console {
+                bottom: 15px;
+                left: 10px;
+                width: 120px;
+            }
+        }
+
+        #inventory-frame {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 126px;
+            height: auto;
+            pointer-events: none;
+            filter: drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.5));
+        }
+
+        #inventory-frame.editable {
+            border: 2px dashed #0ff;
+            pointer-events: auto;
+            cursor: move;
+        }
+
+        #new-hud-icon {
+            position: absolute;
+            top: 210px;
+            left: 20px;
+            width: 63px;
+            height: auto;
+            pointer-events: none;
+            filter: drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.5));
+        }
+
+        #new-hud-icon.editable {
+            border: 2px dashed #0ff;
+            pointer-events: auto;
+            cursor: move;
+        }
+
+        /* Tablet Window Styles */
+        #tablet-window {
+            position: absolute;
+            width: 225px;
+            height: auto;
+            z-index: 2000;
+            display: none;
+            pointer-events: auto;
+        }
+
+        #tablet-window img {
+            width: 100%;
+            display: block;
+        }
+
+        #tablet-window.editable {
+            border: 2px dashed #f0f;
+            cursor: move;
+        }
+
+        .tablet-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            width: 30px;
+            height: 30px;
+            background: rgba(255, 0, 0, 0.8);
+            border-radius: 50%;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 2001;
+            font-family: sans-serif;
+            transition: background 0.2s;
+        }
+
+        .tablet-close:hover {
+            background: rgba(255, 0, 0, 1);
+        }
+
+        .tablet-resize {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, transparent 50%, #0ff 50%);
+            cursor: nwse-resize;
+            z-index: 2002;
+            border-bottom-right-radius: 5px;
+        }
+
+        #tablet-window.dragging,
+        #tablet-window.resizing {
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            cursor: move;
+        }
+
+        /* Manufacturing UI */
+        .tablet-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            /* Vertical centering */
+            gap: 15px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            background: rgba(0, 0, 0, 0.05);
+            pointer-events: none;
+            color: #000;
+            transform: scale(0.6);
+            /* Reduced by 40% */
+            transform-origin: center center;
+            /* Center scaling */
+        }
+
+        .tablet-content * {
+            pointer-events: auto;
+        }
+
+        #mesa-title {
+            color: #000;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2em;
+            text-transform: uppercase;
+            margin: 0;
+        }
+
+        .progress-container {
+            width: 70%;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.1);
+            border: 2px solid #000;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #28a745;
+            box-shadow: none;
+            transition: width 0.1s linear;
+        }
+
+        #fabricar-btn {
+            padding: 8px 20px;
+            background: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            font-size: 0.9em;
+        }
+
+        #fabricar-btn:hover {
+            background: #218838;
+            box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
+            transform: scale(1.05);
+        }
+
+        #fabricar-btn:disabled,
+        #mejorar-btn:disabled {
+            background: #ccc;
+            color: #666;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        #mejorar-btn {
+            padding: 8px 15px;
+            background: #17a2b8;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            font-size: 0.8em;
+        }
+
+        #mejorar-btn:hover:not(:disabled) {
+            background: #138496;
+            box-shadow: 0 0 15px rgba(23, 162, 184, 0.5);
+            transform: scale(1.05);
+        }
+
+        .tablet-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+            width: 100%;
+        }
+
+        #mejorar-molde-btn {
+            padding: 8px 15px;
+            background: #ffc107;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            font-size: 0.8em;
+            width: 100%;
+        }
+
+        #mejorar-molde-btn:hover:not(:disabled) {
+            background: #e0a800;
+            box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
+            transform: scale(1.05);
+        }
+
+        #mejorar-molde-btn:disabled {
+            background: #ccc;
+            color: #666;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        #upgrade-info,
+        #mold-info {
+            font-size: 0.75em;
+            color: #444;
+            font-family: 'Orbitron', sans-serif;
+            margin-top: -2px;
+            width: 100%;
+            text-align: center;
+        }
+
+        #tablet-status {
+            color: #000;
+            font-size: 0.9em;
+            text-align: center;
+            font-family: sans-serif;
+            font-weight: bold;
+        }
+
+        /* Save Menu Styles */
+        #save-menu {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 320px;
+            background: rgba(20, 20, 25, 0.9);
+            border: 2px solid #0ff;
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 5000;
+            display: none;
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+        }
+
+        #save-menu h2 {
+            margin-top: 0;
+            text-align: center;
+            color: #0ff;
+            font-size: 1.2em;
+            letter-spacing: 2px;
+        }
+
+        .save-menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .save-btn-main {
+            padding: 12px;
+            background: #0ff;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+
+        .save-btn-main:hover {
+            box-shadow: 0 0 15px #0ff;
+            transform: scale(1.02);
+        }
+
+        .save-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            border-radius: 5px;
+            padding: 5px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .save-item {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.85em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .save-item:hover {
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        .save-item:last-child {
+            border-bottom: none;
+        }
+
+        .save-item .delete-save {
+            color: #ff4444;
+            font-weight: bold;
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .save-close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            cursor: pointer;
+            color: #666;
+            font-weight: bold;
+        }
+
+        .save-close-btn:hover {
+            color: #fff;
+        }
+
+        /* Employee Menu Styles */
+        #employee-menu {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow-y: auto;
+            background: rgba(15, 25, 35, 0.95);
+            border: 2px solid #ffc107;
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 5100;
+            display: none;
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            box-shadow: 0 0 30px rgba(255, 193, 7, 0.2);
+            backdrop-filter: blur(15px);
+            pointer-events: auto;
+        }
+
+        #employee-menu h2 {
+            margin-top: 0;
+            text-align: center;
+            color: #ffc107;
+            font-size: 1.1em;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        .employee-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .employee-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .employee-card.hired {
+            border-left-color: #28a745;
+        }
+
+        .emp-info {
+            flex-grow: 1;
+        }
+
+        .emp-name {
+            font-size: 0.9em;
+            color: #ffc107;
+            margin-bottom: 4px;
+        }
+
+        .emp-status {
+            font-size: 0.7em;
+            color: #aaa;
+        }
+
+        .emp-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 120px;
+        }
+
+        .emp-btn {
+            padding: 6px 10px;
+            font-size: 0.65em;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: 0.2s;
+        }
+
+        .btn-hire {
+            background: #28a745;
+            color: #fff;
+        }
+
+        .btn-train {
+            background: #17a2b8;
+            color: #fff;
+        }
+
+        .emp-btn:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        .emp-btn:hover:not(:disabled) {
+            filter: brightness(1.2);
+            transform: scale(1.02);
+        }
+
+        /* Accumulation Labels */
+        .accumulation-label {
+            position: absolute;
+            background: rgba(0, 255, 0, 0.8);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            font-weight: bold;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            z-index: 100;
+            display: none;
+            animation: bounce 1s infinite alternate;
+        }
+
+        .accumulation-label.editable {
+            border: 2px dashed #0ff;
+            pointer-events: auto;
+            cursor: move;
+            display: block !important;
+            animation: none;
+        }
+
+        @keyframes bounce {
+            from {
+                margin-top: 0;
+            }
+
+            to {
+                margin-top: -5px;
+            }
+        }
+
+        /* Command Console Styles */
+        #command-console {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 150px;
+            max-width: 80vw;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #0ff;
+            border-radius: 5px;
+            padding: 2px 10px;
+            z-index: 6100;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Orbitron', sans-serif;
+            backdrop-filter: blur(5px);
+            opacity: 0.8;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        #command-console:hover,
+        #command-console:focus-within {
+            opacity: 1;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+
+        #command-input {
+            background: transparent;
+            border: none;
+            color: #0ff;
+            flex-grow: 1;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8em;
+            outline: none;
+            padding: 3px 0;
+        }
+
+        .command-prefix {
+            color: #0ff;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        /* Inventory HUD Labels */
+        #inventory-labels {
+            position: absolute;
+            top: 20px;
+            left: 25px;
+            width: 126px;
+            height: 180px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .inv-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* Center text content */
+            gap: 5px;
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8em;
+            text-shadow: 1px 1px 2px #000;
+            width: 100%;
+            text-align: center;
+        }
+
+        .inv-count {
+            color: #0ff;
+            font-weight: bold;
+        }
+
+        /* Gain Notification */
+        .gain-notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #28a745;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3em;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 3000;
+            text-shadow: 0 0 15px rgba(40, 167, 69, 0.6);
+            animation: gainFloat 1.5s ease-out forwards;
+        }
+
+        @keyframes gainFloat {
+            0% {
+                transform: translate(-50%, -50%) scale(0.5);
+                opacity: 0;
+            }
+
+            20% {
+                transform: translate(-50%, -50%) scale(1.2);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translate(-50%, -80%) scale(1);
+                opacity: 0;
+            }
+        }
+
+        /* HUD Editor Panel */
+        #hud-editor {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #0ff;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            pointer-events: auto;
+            display: none;
+            z-index: 1001;
+        }
+
+        #hud-editor h3 {
+            margin-top: 0;
+            color: #0ff;
+        }
+
+        #hud-editor button {
+            padding: 8px 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 3px;
+        }
+
+        #hud-editor button:hover {
+            background: #0056b3;
+        }
+
+        #hud-editor .btn-success {
+            background: #28a745;
+        }
+
+        #hud-editor .btn-success:hover {
+            background: #218838;
+        }
+
+        .hud-section {
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .hud-section h4 {
+            margin: 0 0 10px 0;
+            color: #0ff;
+            font-size: 0.9em;
+        }
+
+        .hud-section {
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        /* Posiciones Finales */
+        #table-1 {
+            top: 41.37%;
+            right: 26.17%;
+        }
+
+        #table-2 {
+            top: 46.88%;
+            right: 15.81%;
+        }
+
+        #table-3 {
+            top: 53.27%;
+            right: 4.01%;
+        }
+
+        #table-4 {
+            top: 58%;
+            right: 42.12%;
+        }
+
+        #machine-1 {
+            top: 37.30%;
+            right: 29.43%;
+        }
+
+        #machine-2 {
+            top: 42.14%;
+            right: 19.23%;
+        }
+
+        #machine-3 {
+            top: 47.85%;
+            right: 7.37%;
+        }
+
+        #new-object {
+            top: 58%;
+            right: 46.4%;
+        }
+
+        #character {
+            top: 70%;
+            left: 50%;
+        }
+
+        /* Recipe Modal Styles */
+        #recipe-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            padding: 20px;
+        }
+
+        .recipe-container {
+            position: relative;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            background: rgba(15, 25, 35, 0.9);
+            border: 2px solid #0ff;
+            border-radius: 20px;
+            padding: 15px;
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+
+        .recipe-image {
+            max-width: 100%;
+            height: auto;
+            max-height: 70vh;
+            object-fit: contain;
+            border-radius: 12px;
+            border: 1px solid #333;
+            display: block;
+            box-sizing: border-box;
+        }
+
+        .recipe-btn {
+            margin-top: 20px;
+            padding: 15px 40px;
+            background: #0ff;
+            color: #000;
+            border: none;
+            border-radius: 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+        }
+
+        .recipe-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.6);
+            background: #fff;
+        }
+
+        .recipe-title {
+            margin-bottom: 15px;
+            color: #0ff;
+            text-align: center;
+            font-size: 1.5em;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="viewport">
+        <div id="scene-layer">
+            <canvas id="path-canvas"></canvas>
+
+            <img id="background-image" src="Assets/Gemini_Generated_Image_bjcddybjcddybjcd.png" alt="Taller">
+
+            <img id="table-1" class="scene-object table-image" src="Assets/Gemini_Generated_Image_wx2f7wx2f7wx2f7w.png"
+                alt="Mesa 1">
+            <img id="table-2" class="scene-object table-image" src="Assets/Gemini_Generated_Image_wx2f7wx2f7wx2f7w.png"
+                alt="Mesa 2">
+            <img id="table-3" class="scene-object table-image" src="Assets/Gemini_Generated_Image_wx2f7wx2f7wx2f7w.png"
+                alt="Mesa 3">
+            <img id="table-4" class="scene-object table-image" src="Assets/Gemini_Generated_Image_wx2f7wx2f7wx2f7w.png"
+                alt="Mesa 4">
+
+            <img id="machine-1" class="scene-object machine" src="Assets/Gemini_Generated_Image_m2fqlzm2fqlzm2fq.png"
+                alt="Maquina 1">
+            <img id="machine-2" class="scene-object machine" src="Assets/Gemini_Generated_Image_o6y83no6y83no6y8.png"
+                alt="Maquina 2">
+            <img id="machine-3" class="scene-object machine" src="Assets/Gemini_Generated_Image_7oln8n7oln8n7oln.png"
+                alt="Maquina 3">
+
+            <img id="new-object" class="scene-object" src="Assets/Gemini_Generated_Image_vnhrwbvnhrwbvnhr.png"
+                alt="Nuevo Objeto">
+
+            <img id="character" src="Assets/pj.png" alt="Personaje">
+
+            <!-- Waypoints container -->
+            <div id="waypoints-container"></div>
+
+            <!-- Hitboxes container -->
+            <div id="hitboxes-container"></div>
+        </div>
+    </div>
+
+    <!-- HUD Layer (Fixed) -->
+    <div id="hud-layer">
+        <div id="money-wrapper" style="position: absolute; width: 100%; height: 100%; pointer-events: none;">
+            <img id="money-counter" src="Assets/Gemini_Generated_Image_cicxdvcicxdvcicx.png" alt="Money Counter">
+            <div class="money-display">$ <span id="money-amount">0</span></div>
+            <img id="save-icon" src="Assets/Gemini_Generated_Image_rytd6crytd6crytd.png" alt="Guardar"
+                title="Guardar Progreso">
+        </div>
+        <img id="inventory-frame" src="Assets/inventario.png" alt="Inventory Frame">
+        <img id="new-hud-icon" src="Assets/Gemini_Generated_Image_o95twho95twho95t.png" alt="Icono HUD">
+
+        <div id="inventory-labels">
+            <div class="inv-item">Ruedas: <span id="count-wheels" class="inv-count">0</span></div>
+            <div class="inv-item">Ejes: <span id="count-axles" class="inv-count">0</span></div>
+            <div class="inv-item">Tablas: <span id="count-decks" class="inv-count">0</span></div>
+            <div class="inv-item" style="color: #f0f;">Patinetas: <span id="count-skateboards"
+                    class="inv-count">0</span></div>
+        </div>
+        <img id="sell-button" src="Assets/sin presionar.png" alt="Sell Inventory">
+
+        <!-- Tablet Window Container -->
+        <div id="tablet-window">
+            <div class="tablet-close" title="Cerrar">X</div>
+            <img src="Assets/Gemini_Generated_Image_p398jyp398jyp398.png" alt="Tablet Content">
+
+            <!-- Tablet Content -->
+            <div class="tablet-content">
+                <h3 id="mesa-title">Mesa</h3>
+                <div class="progress-container">
+                    <div id="progress-bar" class="progress-fill"></div>
+                </div>
+                <div class="tablet-buttons">
+                    <button id="fabricar-btn">Fabricar</button>
+                    <button id="mejorar-btn">Mejorar Velocidad</button>
+                    <button id="mejorar-molde-btn">Mejorar Molde (x2)</button>
+                </div>
+                <div id="upgrade-info">Velocidad: Lvl <span id="upgrade-lvl">0</span> (Costo: $<span
+                        id="upgrade-cost">10</span>)</div>
+                <div id="mold-info">Molde: Lvl <span id="mold-lvl">0</span> (Costo: $<span id="mold-cost">500</span>)
+                </div>
+                <div id="tablet-status">Listo para fabricar</div>
+            </div>
+            <div class="tablet-resize" title="Cambiar tamaño"></div>
+        </div>
+
+        <!-- Save Menu Overlay -->
+        <div id="save-menu">
+            <div class="save-close-btn" id="close-save-menu">X</div>
+            <h2>CENTRO DE DATOS</h2>
+            <div class="save-menu-buttons">
+                <button class="save-btn-main" id="btn-save-game">Guardar Partida</button>
+            </div>
+            <div style="font-size: 0.8em; margin-bottom: 5px; color: #0ff;">CARGAR PARTIDA:</div>
+            <div class="save-list" id="save-list">
+                <!-- Saves will be listed here -->
+                <div style="text-align: center; color: #666; padding: 10px;">No hay archivos</div>
+            </div>
+        </div>
+
+        <!-- Employee Menu Overlay -->
+        <div id="employee-menu">
+            <div class="save-close-btn" id="close-employee-menu">X</div>
+            <h2>CENTRO DE PERSONAL</h2>
+            <div class="employee-grid" id="employee-grid">
+                <!-- Cards for each mesa -->
+                <div class="employee-card" data-mesa="4">
+                    <div class="emp-info">
+                        <div class="emp-name">Ayudante: Ruedas</div>
+                        <div class="emp-status" id="emp-status-4">No contratado</div>
+                    </div>
+                    <div class="emp-actions">
+                        <button class="emp-btn btn-hire" id="btn-hire-4">Contratar ($1000)</button>
+                        <button class="emp-btn btn-train" id="btn-train-4" disabled>Capacitar ($1000)</button>
+                    </div>
+                </div>
+                <div class="employee-card" data-mesa="5">
+                    <div class="emp-info">
+                        <div class="emp-name">Ayudante: Ejes</div>
+                        <div class="emp-status" id="emp-status-5">No contratado</div>
+                    </div>
+                    <div class="emp-actions">
+                        <button class="emp-btn btn-hire" id="btn-hire-5">Contratar ($1000)</button>
+                        <button class="emp-btn btn-train" id="btn-train-5" disabled>Capacitar ($1000)</button>
+                    </div>
+                </div>
+                <div class="employee-card" data-mesa="6">
+                    <div class="emp-info">
+                        <div class="emp-name">Ayudante: Tablas</div>
+                        <div class="emp-status" id="emp-status-6">No contratado</div>
+                    </div>
+                    <div class="emp-actions">
+                        <button class="emp-btn btn-hire" id="btn-hire-6">Contratar ($1000)</button>
+                        <button class="emp-btn btn-train" id="btn-train-6" disabled>Capacitar ($1000)</button>
+                    </div>
+                </div>
+                <div class="employee-card" data-mesa="0">
+                    <div class="emp-info">
+                        <div class="emp-name">Ayudante: Ensamblaje</div>
+                        <div class="emp-status" id="emp-status-0">No contratado</div>
+                    </div>
+                    <div class="emp-actions">
+                        <button class="emp-btn btn-hire" id="btn-hire-0">Contratar ($1000)</button>
+                        <button class="emp-btn btn-train" id="btn-train-0" disabled>Capacitar ($1000)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HUD Editor -->
+    <div id="hud-editor">
+        <h3>Editor HUD</h3>
+        <div style="color: #ccc; font-size: 0.9em; margin-bottom: 10px;">
+            Arrastra los elementos para posicionarlos<br>
+            Usa los controles para ajustar tamaño
+        </div>
+
+        <div class="hud-section">
+            <h4>Contador de Dinero</h4>
+            <div style="margin: 10px 0;">
+                <label>Ancho: <input type="number" id="hud-width" value="200" min="50" max="500" style="width: 80px;">
+                    px</label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Top: <input type="number" id="hud-top" value="20" min="0" max="1000" style="width: 80px;">
+                    px</label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Right: <input type="number" id="hud-right" value="20" min="0" max="1000" style="width: 80px;">
+                    px</label>
+            </div>
+        </div>
+
+        <div class="hud-section">
+            <h4>Marco Inventario</h4>
+            <div style="margin: 10px 0;">
+                <label>Ancho: <input type="number" id="inv-width" value="126" min="50" max="500" style="width: 80px;">
+                    px</label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Top: <input type="number" id="inv-top" value="20" min="0" max="1000" style="width: 80px;">
+                    px</label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Left: <input type="number" id="inv-left" value="20" min="0" max="1000" style="width: 80px;">
+                    px</label>
+            </div>
+        </div>
+
+        <div class="hud-section">
+            <h4>Botón Vender</h4>
+            <div style="margin: 10px 0;">
+                <label>Ancho: <input type="number" id="sell-width" value="150" min="50" max="500" style="width: 80px;">
+                    px</label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Bottom: <input type="number" id="sell-bottom" value="20" min="0" max="1000" style="width: 80px;">
+                    px</label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Right: <input type="number" id="sell-right" value="20" min="0" max="1000" style="width: 80px;">
+                    px</label>
+            </div>
+        </div>
+
+        <div class="hud-section">
+            <h4>Tablet por Mesa</h4>
+            <div style="margin: 10px 0;">
+                <select id="tablet-mesa-select"
+                    style="width: 100%; padding: 5px; background: #333; color: white; border: 1px solid #0ff;">
+                    <option value="0">Mesa Ensamblaje</option>
+                    <option value="2">Punto Venta</option>
+                    <option value="4">Mesa Ruedas</option>
+                    <option value="5">Mesa Ejes</option>
+                    <option value="6">Mesa Tablas</option>
+                </select>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Ancho: <input type="number" id="tab-width" value="450" min="200" max="800" style="width: 80px;">
+                    px</label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Top: <input type="number" id="tab-top" value="100" min="0" max="1000" style="width: 80px;">
+                    px</label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Left: <input type="number" id="tab-left" value="100" min="0" max="2000" style="width: 80px;">
+                    px</label>
+            </div>
+        </div>
+
+        <div class="hud-section" id="acc-label-editor" style="display: none;">
+            <h4>Letrero Producción</h4>
+            <div style="margin: 10px 0;">
+                <label>Top (%): <input type="number" id="acc-top" value="50" min="0" max="100" step="0.1"
+                        style="width: 80px;"></label>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Left (%): <input type="number" id="acc-left" value="50" min="0" max="100" step="0.1"
+                        style="width: 80px;"></label>
+            </div>
+        </div>
+
+        <button id="apply-hud" class="btn-success">Aplicar Posición</button>
+        <button id="close-hud-editor">Cerrar Editor</button>
+        <div id="hud-output"
+            style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 4px; font-size: 0.85em; display: none;">
+        </div>
+    </div>
+
+    <!-- Recipe Intro Modal -->
+    <div id="recipe-modal">
+        <div class="recipe-container">
+            <h2 class="recipe-title">RECETA DE FABRICACIÓN</h2>
+            <img src="Assets/Gemini_Generated_Image_1dfkq61dfkq61dfk.png" alt="Receta de Patineta" class="recipe-image">
+            <button id="close-recipe" class="recipe-btn">¡A FABRICAR!</button>
+        </div>
+    </div>
+
+    <!-- Command Console -->
+    <div id="command-console">
+        <span class="command-prefix">></span>
+        <input type="text" id="command-input" placeholder="Escribe un comando..." autocomplete="off">
+    </div>
+
+    <script>
+        const viewport = document.getElementById('viewport');
+        const layer = document.getElementById('scene-layer');
+        const bgImg = document.getElementById('background-image');
+        const character = document.getElementById('character');
+        const waypointsContainer = document.getElementById('waypoints-container');
+        const hitboxesContainer = document.getElementById('hitboxes-container');
+        const pathCanvas = document.getElementById('path-canvas');
+        const ctx = pathCanvas.getContext('2d');
+
+        // Waypoints with special functions (circular: 8 connects to 1)
+        const waypoints = [
+            { x: 45.08, y: 72.97, label: "Mesa Ensamblaje", special: true },
+            { x: 34.41, y: 65.94, label: "2", special: false },
+            { x: 35.81, y: 50.91, label: "Punto Venta", special: true },
+            { x: 50.14, y: 51.76, label: "4", special: false },
+            { x: 61.10, y: 55.13, label: "Mesa Ruedas", special: true },
+            { x: 72.19, y: 60.61, label: "Mesa Ejes", special: true },
+            { x: 83.15, y: 66.79, label: "Mesa Tablas", special: true },
+            { x: 63.91, y: 77.88, label: "8", special: false }
+        ];
+
+        const numWaypoints = waypoints.length;
+
+        // Hitbox data from user
+        const hitboxData = [
+            {
+                name: "Mesa Ensamblaje",
+                wpIndex: 0,
+                left: 41.7123,
+                top: 56.8128,
+                width: 16.2944,
+                height: 11.9399
+            },
+            {
+                name: "Punto Venta",
+                wpIndex: 2,
+                left: 35.6721,
+                top: 47.6823,
+                width: 7.3044,
+                height: 6.32111
+            },
+            {
+                name: "Mesa Ruedas",
+                wpIndex: 4,
+                left: 62.0804,
+                top: 39.1136,
+                width: 8.56862,
+                height: 8.70909
+            },
+            {
+                name: "Mesa Ejes",
+                wpIndex: 5,
+                left: 73.3179,
+                top: 42.0635,
+                width: 7.86627,
+                height: 10.5352
+            },
+            {
+                name: "Mesa Tablas",
+                wpIndex: 6,
+                left: 83.9935,
+                top: 47.8227,
+                width: 8.70909,
+                height: 11.5185
+            }
+        ];
+
+        let scale = 1;
+        let pointX = 0;
+        let pointY = 0;
+
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let panStartX = 0, panStartY = 0;
+        let dragThreshold = 5;
+        let hasMoved = false;
+        let initialTouchDistance = 0;
+        let initialScale = 1;
+
+        let currentWaypointIndex = 0;
+        let isMoving = false;
+        let currentPath = [];
+
+        function setSceneTransform() {
+            layer.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
+        }
+
+        bgImg.onload = function () {
+            const viewW = viewport.clientWidth;
+            const viewH = viewport.clientHeight;
+            const imgW = bgImg.naturalWidth || 1920;
+            const imgH = bgImg.naturalHeight || 1080;
+            const scaleW = viewW / imgW;
+            const scaleH = viewH / imgH;
+            scale = Math.min(scaleW, scaleH) * 0.9;
+            pointX = (viewW - imgW * scale) / 2;
+            pointY = (viewH - imgH * scale) / 2;
+
+            pathCanvas.width = imgW;
+            pathCanvas.height = imgH;
+
+            setSceneTransform();
+            createWaypoints();
+            createHitboxes();
+            updateCurrentWaypoint();
+            layer.style.visibility = 'visible';
+        };
+        if (bgImg.complete) bgImg.onload();
+
+        // --- Create Waypoints ---
+        function createWaypoints() {
+            waypointsContainer.innerHTML = '';
+            waypoints.forEach((wp, idx) => {
+                const marker = document.createElement('div');
+                marker.className = 'waypoint' + (wp.special ? ' special' : '');
+                marker.style.left = wp.x + '%';
+                marker.style.top = wp.y + '%';
+                marker.textContent = idx + 1;
+                marker.title = wp.label;
+                marker.dataset.index = idx;
+                marker.id = 'wp-' + idx;
+                waypointsContainer.appendChild(marker);
+            });
+        }
+
+        // --- Create Hitboxes ---
+        function createHitboxes() {
+            hitboxesContainer.innerHTML = '';
+            hitboxData.forEach(hb => {
+                const hitbox = document.createElement('div');
+                hitbox.className = 'hitbox';
+                hitbox.style.left = hb.left + '%';
+                hitbox.style.top = hb.top + '%';
+                hitbox.style.width = hb.width + '%';
+                hitbox.style.height = hb.height + '%';
+                hitbox.title = hb.name;
+
+                const handleInteraction = (e) => {
+                    e.stopPropagation();
+                    if (e.type === 'touchstart') e.preventDefault();
+                    if (isDragging || hasMoved) return;
+                    moveToWaypoint(hb.wpIndex, hb.wpIndex);
+                };
+
+                hitbox.addEventListener('click', handleInteraction);
+                hitbox.addEventListener('touchstart', handleInteraction, { passive: false });
+
+                hitboxesContainer.appendChild(hitbox);
+            });
+        }
+
+        // --- Calculate Shortest Path ---
+        function findShortestPath(start, end) {
+            if (start === end) return [start];
+
+            let forwardPath = [];
+            let backwardPath = [];
+
+            let current = start;
+            forwardPath.push(current);
+            while (current !== end) {
+                current = (current + 1) % numWaypoints;
+                forwardPath.push(current);
+            }
+
+            current = start;
+            backwardPath.push(current);
+            while (current !== end) {
+                current = (current - 1 + numWaypoints) % numWaypoints;
+                backwardPath.push(current);
+            }
+
+            return forwardPath.length <= backwardPath.length ? forwardPath : backwardPath;
+        }
+
+        // --- Update Current Waypoint Marker ---
+        function updateCurrentWaypoint() {
+            document.querySelectorAll('.waypoint').forEach(wp => {
+                wp.classList.remove('current');
+            });
+            const currentMarker = document.getElementById('wp-' + currentWaypointIndex);
+            if (currentMarker) {
+                currentMarker.classList.add('current');
+            }
+
+            // Collect production if character is at a mesa
+            if (mesaAccumulation[currentWaypointIndex] > 0) {
+                const count = mesaAccumulation[currentWaypointIndex];
+                const config = mesaConfig[currentWaypointIndex];
+                if (config) {
+                    inventory[config.type] += count;
+                    mesaAccumulation[currentWaypointIndex] = 0;
+                    updateInventoryUI();
+                    updateAccumulationLabels();
+                    showTabletStatusNotification(`Recogido: ${count}`);
+                }
+            }
+        }
+
+        let pendingTabletMesa = null;
+
+        // --- Move to Waypoint ---
+        function moveToWaypoint(targetIndex, tabletMesaIndex = null) {
+            if (isMoving) return;
+            isMoving = true;
+            pendingTabletMesa = tabletMesaIndex;
+
+            currentPath = findShortestPath(currentWaypointIndex, targetIndex);
+            const totalSteps = currentPath.length - 1;
+            const timePerStep = 0.5;
+            const totalTime = totalSteps * timePerStep;
+
+            animateSmoothPath(totalTime);
+        }
+
+        // --- Animate Smooth Path (follows waypoint route) ---
+        function animateSmoothPath(totalTime) {
+            isMoving = true;
+            let currentStep = 0;
+
+            function moveToNextWaypoint() {
+                if (currentStep >= currentPath.length) {
+                    // Animation complete
+                    isMoving = false;
+
+                    if (isPendingSale) {
+                        completeSale();
+                        isPendingSale = false;
+                    } else if (pendingTabletMesa !== null) {
+                        showTablet(pendingTabletMesa);
+                        pendingTabletMesa = null;
+                    }
+                    return;
+                }
+
+                const wpIndex = currentPath[currentStep];
+                const wp = waypoints[wpIndex];
+                const timePerStep = 0.5; // seconds per waypoint
+
+                // Move to this waypoint
+                character.style.transition = `top ${timePerStep}s linear, left ${timePerStep}s linear`;
+                character.style.left = wp.x + '%';
+                character.style.top = wp.y + '%';
+
+                // Update current position
+                currentWaypointIndex = wpIndex;
+                updateCurrentWaypoint();
+
+                currentStep++;
+
+                // Schedule next waypoint
+                setTimeout(moveToNextWaypoint, timePerStep * 1000);
+            }
+
+            // Start moving
+            moveToNextWaypoint();
+        }
+
+        // --- Mouse Handling ---
+        viewport.onmousedown = function (e) {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            startX = e.clientX;
+            startY = e.clientY;
+            isDragging = true;
+            hasMoved = false;
+            viewport.style.cursor = 'grabbing';
+            panStartX = e.clientX - pointX;
+            panStartY = e.clientY - pointY;
+        }
+
+        window.onmouseup = function (e) {
+            isDragging = false;
+            viewport.style.cursor = 'grab';
+        }
+
+        window.onmousemove = function (e) {
+            e.preventDefault();
+            if (!isDragging) return;
+            const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+            if (dist > dragThreshold) hasMoved = true;
+
+            if (hasMoved) {
+                pointX = e.clientX - panStartX;
+                pointY = e.clientY - panStartY;
+                setSceneTransform();
+            }
+        }
+
+        viewport.onwheel = function (e) {
+            e.preventDefault();
+            const zoomIntensity = 0.1;
+            const delta = -Math.sign(e.deltaY);
+            const newScale = Math.min(Math.max(0.1, scale + delta * zoomIntensity), 30);
+
+            const rect = viewport.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const xs = (mouseX - pointX) / scale;
+            const ys = (mouseY - pointY) / scale;
+
+            if (newScale !== scale) {
+                pointX = mouseX - xs * newScale;
+                pointY = mouseY - ys * newScale;
+                scale = newScale;
+                setSceneTransform();
+            }
+        }
+
+        // --- Touch Handling ---
+        viewport.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                // Start Panning
+                const touch = e.touches[0];
+                startX = touch.clientX;
+                startY = touch.clientY;
+                isDragging = true;
+                hasMoved = false;
+                panStartX = touch.clientX - pointX;
+                panStartY = touch.clientY - pointY;
+            } else if (e.touches.length === 2) {
+                // Start Pinching
+                isDragging = false;
+                initialTouchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                initialScale = scale;
+            }
+        }, { passive: false });
+
+        viewport.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 1 && isDragging) {
+                // Panning
+                const touch = e.touches[0];
+                const dist = Math.hypot(touch.clientX - startX, touch.clientY - startY);
+                if (dist > dragThreshold) hasMoved = true;
+
+                if (hasMoved) {
+                    pointX = touch.clientX - panStartX;
+                    pointY = touch.clientY - panStartY;
+                    setSceneTransform();
+                }
+            } else if (e.touches.length === 2) {
+                // Pinch to Zoom
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+
+                if (initialTouchDistance > 0) {
+                    const ratio = currentDistance / initialTouchDistance;
+                    const newScale = Math.min(Math.max(0.1, initialScale * ratio), 30);
+
+                    if (newScale !== scale) {
+                        const rect = viewport.getBoundingClientRect();
+                        const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                        const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+                        const xs = (centerX - pointX) / scale;
+                        const ys = (centerY - pointY) / scale;
+
+                        pointX = centerX - xs * newScale;
+                        pointY = centerY - ys * newScale;
+                        scale = newScale;
+                        setSceneTransform();
+                    }
+                }
+            }
+        }, { passive: false });
+
+        viewport.addEventListener('touchend', (e) => {
+            isDragging = false;
+            initialTouchDistance = 0;
+        });
+
+        // --- HUD Editor System ---
+        const moneyCounter = document.getElementById('money-counter');
+        const inventoryFrame = document.getElementById('inventory-frame');
+        const sellButton = document.getElementById('sell-button');
+        const hudEditor = document.getElementById('hud-editor');
+
+        const hudWidthInput = document.getElementById('hud-width');
+        const hudTopInput = document.getElementById('hud-top');
+        const hudRightInput = document.getElementById('hud-right');
+
+        const invWidthInput = document.getElementById('inv-width');
+        const invTopInput = document.getElementById('inv-top');
+        const invLeftInput = document.getElementById('inv-left');
+
+        const sellWidthInput = document.getElementById('sell-width');
+        const sellBottomInput = document.getElementById('sell-bottom');
+        const sellRightInput = document.getElementById('sell-right');
+
+        const applyHudBtn = document.getElementById('apply-hud');
+        const closeHudBtn = document.getElementById('close-hud-editor');
+        const hudOutput = document.getElementById('hud-output');
+
+        const tabletWindow = document.getElementById('tablet-window');
+        const tabletCloseBtn = document.querySelector('.tablet-close');
+        const saveIcon = document.getElementById('save-icon');
+        const saveMenu = document.getElementById('save-menu');
+        const btnSaveGame = document.getElementById('btn-save-game');
+        const btnCloseSave = document.getElementById('close-save-menu');
+        const employeeMenu = document.getElementById('employee-menu');
+        const closeEmployeeMenu = document.getElementById('close-employee-menu');
+        const newHudIcon = document.getElementById('new-hud-icon');
+
+        const tabletMesaSelect = document.getElementById('tablet-mesa-select');
+        const tabWidthInput = document.getElementById('tab-width');
+        const tabTopInput = document.getElementById('tab-top');
+        const tabLeftInput = document.getElementById('tab-left');
+
+        let isHudEditorActive = false;
+        let isDraggingHud = false;
+        let dragTarget = null;
+
+        // Saved custom positions per mesa (index matches hitboxData/waypoints)
+        let tabletPositions = {};
+
+        function getDynamicCenterPos() {
+            const width = 225;
+            const left = (window.innerWidth - width) / 2;
+            const top = (window.innerHeight - 350) / 2;
+
+            return {
+                top: Math.max(20, Math.round(top)),
+                left: Math.max(20, Math.round(left)),
+                width: width
+            };
+        }
+
+        function getMesaTabletPos(wpIndex) {
+            return tabletPositions[wpIndex] || getDynamicCenterPos();
+        }
+
+        let currentEditingMesa = "0";
+        let activeTabletMesaIndex = null;
+        let isProducing = false;
+        let isPendingSale = false;
+
+        let playerMoney = 0; // Start money
+        let inventory = {
+            wheels: 0,
+            axles: 0,
+            decks: 0,
+            skateboards: 0
+        };
+
+        const mesaConfig = {
+            "4": { name: "Mesa de Ruedas", time: 1000, type: "wheels", reward: 1, reqs: null },
+            "5": { name: "Mesa de Ejes", time: 2000, type: "axles", reward: 1, reqs: null },
+            "6": { name: "Mesa de Tablas", time: 4000, type: "decks", reward: 1, reqs: null },
+            "0": {
+                name: "Mesa de Ensamblaje",
+                time: 5000,
+                type: "skateboards",
+                reward: 1,
+                reqs: { wheels: 4, axles: 2, decks: 1 }
+            }
+        };
+
+        // Upgrade state per mesa index
+        let mesaUpgrades = {
+            "0": 0, "4": 0, "5": 0, "6": 0
+        };
+
+        let mesaMoldUpgrades = {
+            "0": 0, "4": 0, "5": 0, "6": 0
+        };
+
+        let mesaEmployees = {
+            "0": false, "4": false, "5": false, "6": false
+        };
+
+        let mesaEmployeeTraining = {
+            "0": 0, "4": 0, "5": 0, "6": 0
+        };
+
+        let mesaAccumulation = {
+            "0": 0, "4": 0, "5": 0, "6": 0
+        };
+
+        let accumulationLabelPositions = {
+            "0": { top: "56%", left: "41%" },
+            "4": { top: "39%", left: "62%" },
+            "5": { top: "42%", left: "73%" },
+            "6": { top: "47%", left: "83%" }
+        };
+
+        const getUpgradeCost = (lvl) => 10 * Math.pow(2, lvl);
+        const getMoldUpgradeCost = (lvl) => 500 * Math.pow(2, lvl);
+        const getHireCost = () => 1000;
+        const getTrainingCost = (lvl) => 1000 * Math.pow(2, lvl);
+
+        const getEmployeeEfficiency = (lvl) => {
+            // Level 0: 4x, Lvl 1: 3x, Lvl 2: 2x, Lvl 3: 1.5x, Lvl 4+: 1x
+            if (lvl === 0) return 4;
+            if (lvl === 1) return 3;
+            if (lvl === 2) return 2;
+            if (lvl === 3) return 1.5;
+            return 1;
+        };
+        const getProductionTime = (wpIndex) => {
+            const baseTime = mesaConfig[wpIndex].time;
+            const lvl = mesaUpgrades[wpIndex] || 0;
+            // 0.5% improvement per level: time = base / (1.005^lvl)
+            return baseTime / Math.pow(1.005, lvl);
+        };
+
+        const mesaTitleEl = document.getElementById('mesa-title');
+        const tabletStatusEl = document.getElementById('tablet-status');
+        const progressBarEl = document.getElementById('progress-bar');
+        const fabricarBtn = document.getElementById('fabricar-btn');
+        const mejorarBtn = document.getElementById('mejorar-btn');
+        const upgradeLvlEl = document.getElementById('upgrade-lvl');
+        const upgradeCostEl = document.getElementById('upgrade-cost');
+
+        const countWheelsEl = document.getElementById('count-wheels');
+        const countAxlesEl = document.getElementById('count-axles');
+        const countDecksEl = document.getElementById('count-decks');
+        const countSkateboardsEl = document.getElementById('count-skateboards');
+
+        function updateInventoryUI() {
+            countWheelsEl.textContent = inventory.wheels;
+            countAxlesEl.textContent = inventory.axles;
+            countDecksEl.textContent = inventory.decks;
+            countSkateboardsEl.textContent = inventory.skateboards;
+
+            // Sync money display
+            const moneyDisplay = document.getElementById('money-amount');
+            if (moneyDisplay) moneyDisplay.textContent = playerMoney;
+
+            // Sync upgrade button state if tablet is open
+            if (typeof updateUpgradeUI === 'function') updateUpgradeUI();
+        }
+
+        function completeSale() {
+            if (inventory.skateboards > 0) {
+                const profit = inventory.skateboards * 50;
+                playerMoney += profit;
+                const soldCount = inventory.skateboards;
+                inventory.skateboards = 0;
+                updateInventoryUI();
+                showGainNotification(profit);
+                console.log(`Vendidas ${soldCount} patinetas por $${profit}`);
+            }
+        }
+
+        function showGainNotification(amount) {
+            const label = document.createElement('div');
+            label.className = 'gain-notification';
+            label.textContent = `+$${amount}`;
+            document.body.appendChild(label);
+            setTimeout(() => label.remove(), 1500);
+        }
+
+        let hudDragStartX = 0;
+        let hudDragStartY = 0;
+        let hudStartTop = 0;
+        let hudStartRight = 0;
+        let hudStartBottom = 0;
+        let hudStartLeft = 0;
+        let hudStartWidth = 0;
+
+        let isResizingTablet = false;
+        let isDraggingTabletDirect = false;
+
+        function showTablet(wpIndex) {
+            activeTabletMesaIndex = wpIndex;
+            const savedPos = getMesaTabletPos(wpIndex);
+            const pos = savedPos || getDynamicCenterPos();
+
+            tabletWindow.style.top = pos.top + 'px';
+            tabletWindow.style.left = pos.left + 'px';
+            tabletWindow.style.width = pos.width + 'px';
+            tabletWindow.style.display = 'block';
+
+            progressBarEl.style.transition = 'none';
+            progressBarEl.style.width = '0%';
+            isProducing = false;
+            fabricarBtn.disabled = false;
+
+            const config = mesaConfig[wpIndex];
+            if (config) {
+                mesaTitleEl.textContent = config.name;
+                tabletStatusEl.textContent = config.reqs ?
+                    `Requiere: ${config.reqs.wheels} Ruedas, ${config.reqs.axles} Ejes, ${config.reqs.decks} Tabla` :
+                    "Listo para fabricar";
+                fabricarBtn.style.display = 'block';
+                updateUpgradeUI();
+            } else {
+                mesaTitleEl.textContent = "Punto de Interés";
+                tabletStatusEl.textContent = "No hay tareas aquí.";
+                fabricarBtn.style.display = 'none';
+                const upInfo = document.getElementById('upgrade-info');
+                const mInfo = document.getElementById('mold-info');
+                if (upInfo) upInfo.style.display = 'none';
+                if (mInfo) mInfo.style.display = 'none';
+            }
+        }
+
+        const moldLvlEl = document.getElementById('mold-lvl');
+        const moldCostEl = document.getElementById('mold-cost');
+        const mejorarMoldeBtn = document.getElementById('mejorar-molde-btn');
+
+        function updateUpgradeUI() {
+            if (activeTabletMesaIndex === null) return;
+
+            const lvl = mesaUpgrades[activeTabletMesaIndex] || 0;
+            const cost = getUpgradeCost(lvl);
+            const moldLvl = mesaMoldUpgrades[activeTabletMesaIndex] || 0;
+            const moldCost = getMoldUpgradeCost(moldLvl);
+
+            if (upgradeLvlEl) upgradeLvlEl.textContent = lvl;
+            if (upgradeCostEl) upgradeCostEl.textContent = cost;
+            if (moldLvlEl) moldLvlEl.textContent = moldLvl;
+            if (moldCostEl) moldCostEl.textContent = moldCost;
+
+            const upInfo = document.getElementById('upgrade-info');
+            const mInfo = document.getElementById('mold-info');
+            if (upInfo) upInfo.style.display = 'block';
+            if (mInfo) mInfo.style.display = 'block';
+
+            mejorarBtn.disabled = playerMoney < cost || isProducing;
+            mejorarMoldeBtn.disabled = playerMoney < moldCost || isProducing;
+        }
+
+        function addButtonListener(btn, callback) {
+            if (!btn) return;
+            const handler = (e) => {
+                e.stopPropagation();
+                if (e.type === 'touchstart') e.preventDefault();
+                callback(e);
+            };
+            btn.addEventListener('click', handler);
+            btn.addEventListener('touchstart', handler, { passive: false });
+        }
+
+        addButtonListener(tabletCloseBtn, () => {
+            tabletWindow.style.display = 'none';
+            activeTabletMesaIndex = null;
+        });
+
+        // Close tablet when clicking outside
+        window.addEventListener('mousedown', (e) => {
+            if (isHudEditorActive) return;
+            if (tabletWindow.style.display === 'block' && !tabletWindow.contains(e.target)) {
+                tabletWindow.style.display = 'none';
+                activeTabletMesaIndex = null;
+            }
+        });
+
+        window.addEventListener('touchstart', (e) => {
+            if (isHudEditorActive) return;
+            if (tabletWindow.style.display === 'block' && !tabletWindow.contains(e.target)) {
+                // Only close if not clicking a hitbox
+                if (!e.target.classList.contains('hitbox')) {
+                    tabletWindow.style.display = 'none';
+                    activeTabletMesaIndex = null;
+                }
+            }
+        }, { passive: true });
+
+        addButtonListener(fabricarBtn, () => {
+            const config = mesaConfig[activeTabletMesaIndex];
+            if (!config || isProducing) return;
+
+            if (config.reqs) {
+                if (inventory.wheels < config.reqs.wheels ||
+                    inventory.axles < config.reqs.axles ||
+                    inventory.decks < config.reqs.decks) {
+                    tabletStatusEl.textContent = "¡Faltan materiales!";
+                    tabletStatusEl.style.color = "#ff4444";
+                    setTimeout(() => { tabletStatusEl.style.color = "#000"; }, 1000);
+                    return;
+                }
+                inventory.wheels -= config.reqs.wheels;
+                inventory.axles -= config.reqs.axles;
+                inventory.decks -= config.reqs.decks;
+                updateInventoryUI();
+            }
+
+            isProducing = true;
+            fabricarBtn.disabled = true;
+            mejorarBtn.disabled = true;
+            tabletStatusEl.textContent = "Fabricando...";
+            const prodTime = getProductionTime(activeTabletMesaIndex);
+            progressBarEl.style.transition = `width ${prodTime}ms linear`;
+            setTimeout(() => { progressBarEl.style.width = '100%'; }, 10);
+
+            setTimeout(() => {
+                if (activeTabletMesaIndex === null) return;
+                executeProduction(activeTabletMesaIndex);
+                progressBarEl.style.transition = 'none';
+                progressBarEl.style.width = '0%';
+                isProducing = false;
+                fabricarBtn.disabled = false;
+                updateUpgradeUI();
+                tabletStatusEl.textContent = config.reqs ? "Listo para ensamblar" : "Listo para fabricar";
+            }, prodTime);
+        });
+
+        addButtonListener(mejorarBtn, () => {
+            const cost = getUpgradeCost(mesaUpgrades[activeTabletMesaIndex]);
+            if (playerMoney >= cost) {
+                playerMoney -= cost;
+                mesaUpgrades[activeTabletMesaIndex]++;
+                updateInventoryUI();
+                updateUpgradeUI();
+            }
+        });
+
+        addButtonListener(mejorarMoldeBtn, () => {
+            const moldLvl = mesaMoldUpgrades[activeTabletMesaIndex] || 0;
+            const cost = getMoldUpgradeCost(moldLvl);
+            if (playerMoney >= cost) {
+                playerMoney -= cost;
+                mesaMoldUpgrades[activeTabletMesaIndex]++;
+                updateInventoryUI();
+                updateUpgradeUI();
+                showTabletStatusNotification("Molde Mejorado (x2)");
+            }
+        });
+
+        addButtonListener(saveIcon, () => {
+            if (isHudEditorActive) return;
+            toggleSaveMenu();
+        });
+
+        addButtonListener(btnCloseSave, () => toggleSaveMenu());
+
+        addButtonListener(btnSaveGame, () => saveCurrentGame());
+
+        addButtonListener(closeEmployeeMenu, () => toggleEmployeeMenu());
+
+        addButtonListener(newHudIcon, () => {
+            if (!isHudEditorActive) toggleEmployeeMenu();
+        });
+
+        addButtonListener(sellButton, (e) => {
+            if (isHudEditorActive || isMoving) return;
+            if (inventory.skateboards > 0) {
+                sellButton.src = "Assets/presionado.png";
+                setTimeout(() => { sellButton.src = "Assets/sin presionar.png"; }, 200);
+                isPendingSale = true;
+                moveToWaypoint(2);
+            }
+        });
+
+        function updateEmployeeUI() {
+            const ids = ["4", "5", "6", "0"];
+            ids.forEach(id => {
+                const isHired = mesaEmployees[id];
+                const trainingLvl = mesaEmployeeTraining[id] || 0;
+                const hireCost = getHireCost();
+                const trainCost = getTrainingCost(trainingLvl);
+
+                const card = document.querySelector(`.employee-card[data-mesa="${id}"]`);
+                const statusEl = document.getElementById(`emp-status-${id}`);
+                const btnHire = document.getElementById(`btn-hire-${id}`);
+                const btnTrain = document.getElementById(`btn-train-${id}`);
+
+                if (isHired) {
+                    card.classList.add('hired');
+                    statusEl.textContent = `Contratado (Velocidad: ${getEmployeeEfficiency(trainingLvl)}x)`;
+                    btnHire.disabled = true;
+                    btnHire.textContent = "Contratado";
+                    btnTrain.disabled = playerMoney < trainCost || trainingLvl >= 4;
+                    btnTrain.textContent = trainingLvl >= 4 ? "Máximo Nivel" : `Capacitar ($${trainCost})`;
+                } else {
+                    card.classList.remove('hired');
+                    statusEl.textContent = "No contratado";
+                    btnHire.disabled = playerMoney < hireCost;
+                    btnHire.textContent = `Contratar ($${hireCost})`;
+                    btnTrain.disabled = true;
+                }
+
+                btnHire.onclick = () => {
+                    if (playerMoney >= hireCost) {
+                        playerMoney -= hireCost;
+                        mesaEmployees[id] = true;
+                        updateInventoryUI();
+                        updateEmployeeUI();
+                        showTabletStatusNotification("Ayudante Contratado");
+                        startAutomationForMesa(id);
+                    }
+                };
+
+                btnTrain.onclick = () => {
+                    if (playerMoney >= trainCost) {
+                        playerMoney -= trainCost;
+                        mesaEmployeeTraining[id]++;
+                        updateInventoryUI();
+                        updateEmployeeUI();
+                        showTabletStatusNotification("Ayudante Capacitado");
+                    }
+                };
+            });
+        }
+
+        let mesaAutomationIntervals = {};
+
+        function startAutomationForMesa(id) {
+            if (mesaAutomationIntervals[id]) return;
+
+            const runAuto = () => {
+                if (!mesaEmployees[id]) return;
+
+                const isMesaActive = (activeTabletMesaIndex == id && isProducing);
+                // The employee only works if the player isn't manually producing on THIS specific mesa
+                // to avoid overlapping UI animations vs background logic.
+                if (!isMesaActive) {
+                    executeProduction(id, true);
+                }
+
+                const baseProdTime = getProductionTime(id);
+                const efficiency = getEmployeeEfficiency(mesaEmployeeTraining[id] || 0);
+                const nextRun = baseProdTime * efficiency;
+
+                mesaAutomationIntervals[id] = setTimeout(runAuto, nextRun);
+            };
+
+            runAuto();
+        }
+
+        function executeProduction(id, isAuto = false) {
+            const config = mesaConfig[id];
+            if (!config) return;
+
+            // Requirements check for automated workers (silent check)
+            if (config.reqs) {
+                if (inventory.wheels < config.reqs.wheels ||
+                    inventory.axles < config.reqs.axles ||
+                    inventory.decks < config.reqs.decks) {
+                    return; // Fail silently for auto
+                }
+
+                inventory.wheels -= config.reqs.wheels;
+                inventory.axles -= config.reqs.axles;
+                inventory.decks -= config.reqs.decks;
+            }
+
+            const moldLvl = mesaMoldUpgrades[id] || 0;
+            const multiplier = Math.pow(2, moldLvl);
+            const reward = (config.reward * multiplier);
+
+            if (isAuto) {
+                mesaAccumulation[id] += reward;
+            } else {
+                inventory[config.type] += reward;
+            }
+
+            updateInventoryUI();
+            updateAccumulationLabels();
+            if (isAuto) {
+                // Future: add a small floating ghost icon or toast for auto completion?
+            }
+        }
+
+        function updateAccumulationLabels() {
+            Object.keys(mesaAccumulation).forEach(id => {
+                let label = document.getElementById(`acc-label-${id}`);
+                if (!label) {
+                    label = document.createElement('div');
+                    label.id = `acc-label-${id}`;
+                    label.className = 'accumulation-label';
+                    document.getElementById('scene-layer').appendChild(label);
+
+                    // Add to draggable elements if editor is active
+                    if (isHudEditorActive) {
+                        label.classList.add('editable');
+                        setupDraggable(label, `acc-${id}`);
+                    }
+                }
+
+                const count = mesaAccumulation[id];
+                if (count > 0 || isHudEditorActive) {
+                    label.textContent = count > 0 ? `Pendiente: ${count}` : "Pendiente: 0";
+                    label.style.display = 'block';
+
+                    const pos = accumulationLabelPositions[id];
+                    if (pos) {
+                        label.style.top = pos.top;
+                        label.style.left = pos.left;
+                    }
+                } else {
+                    label.style.display = 'none';
+                }
+            });
+        }
+
+        function getGameState() {
+            return {
+                money: playerMoney,
+                inventory: { ...inventory },
+                upgrades: { ...mesaUpgrades },
+                moldUpgrades: { ...mesaMoldUpgrades },
+                employees: { ...mesaEmployees },
+                employeeTraining: { ...mesaEmployeeTraining },
+                accumulations: { ...mesaAccumulation },
+                tabletPositions: { ...tabletPositions },
+                waypoint: currentWaypointIndex,
+                hud: {
+                    money: {
+                        top: moneyCounter.style.top,
+                        right: moneyCounter.style.right,
+                        width: moneyCounter.style.width
+                    },
+                    inventory: {
+                        top: inventoryFrame.style.top,
+                        left: inventoryFrame.style.left,
+                        width: inventoryFrame.style.width
+                    },
+                    sell: {
+                        bottom: sellButton.style.bottom,
+                        right: sellButton.style.right,
+                        width: sellButton.style.width
+                    }
+                },
+                timestamp: new Date().toLocaleString()
+            };
+        }
+
+        function saveCurrentGame() {
+            const state = getGameState();
+            const saveName = `save_${Date.now()}`;
+            localStorage.setItem(saveName, JSON.stringify(state));
+            showTabletStatusNotification("Partida Guardada");
+            refreshSaveList();
+        }
+
+        function refreshSaveList() {
+            saveListEl.innerHTML = '';
+            let saveFound = false;
+
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('save_')) {
+                    saveFound = true;
+                    const data = JSON.parse(localStorage.getItem(key));
+
+                    const item = document.createElement('div');
+                    item.className = 'save-item';
+                    item.innerHTML = `
+                        <span>${data.timestamp}</span>
+                        <span class="delete-save" data-key="${key}">[X]</span>
+                    `;
+                    item.onclick = (e) => {
+                        if (e.target.classList.contains('delete-save')) {
+                            localStorage.removeItem(key);
+                            refreshSaveList();
+                        } else {
+                            loadGame(key);
+                        }
+                    };
+                    saveListEl.appendChild(item);
+                }
+            }
+
+            if (!saveFound) {
+                saveListEl.innerHTML = '<div style="text-align: center; color: #666; padding: 10px;">No hay archivos</div>';
+            }
+        }
+
+        function loadGame(key) {
+            const raw = localStorage.getItem(key);
+            if (!raw) return;
+            const state = JSON.parse(raw);
+
+            // Restore Variables
+            playerMoney = state.money;
+            inventory = state.inventory;
+            mesaUpgrades = state.upgrades;
+            mesaMoldUpgrades = state.moldUpgrades || { "0": 0, "4": 0, "5": 0, "6": 0 };
+            mesaEmployees = state.employees || { "0": false, "4": false, "5": false, "6": false };
+            mesaEmployeeTraining = state.employeeTraining || { "0": 0, "4": 0, "5": 0, "6": 0 };
+            mesaAccumulation = state.accumulations || { "0": 0, "4": 0, "5": 0, "6": 0 };
+            tabletPositions = state.tabletPositions;
+            accumulationLabelPositions = state.accumulationLabelPositions || {
+                "0": { top: "56%", left: "41%" },
+                "4": { top: "39%", left: "62%" },
+                "5": { top: "42%", left: "73%" },
+                "6": { top: "47%", left: "83%" }
+            };
+
+            // Stop existing automation before starting new ones from the loaded state
+            Object.values(mesaAutomationIntervals).forEach(clearTimeout);
+            mesaAutomationIntervals = {};
+
+            // Re-start automation for hired workers
+            bootstrapAutomation();
+
+            // Restore HUD Styles
+            if (state.hud) {
+                moneyCounter.style.top = state.hud.money.top;
+                moneyCounter.style.right = state.hud.money.right;
+                moneyCounter.style.width = state.hud.money.width;
+                inventoryFrame.style.top = state.hud.inventory.top;
+                inventoryFrame.style.left = state.hud.inventory.left;
+                inventoryFrame.style.width = state.hud.inventory.width;
+                sellButton.style.bottom = state.hud.sell.bottom;
+                sellButton.style.right = state.hud.sell.right;
+                sellButton.style.width = state.hud.sell.width;
+
+                const invLabels = document.getElementById('inventory-labels');
+                if (invLabels) {
+                    invLabels.style.top = inventoryFrame.style.top;
+                    invLabels.style.left = inventoryFrame.style.left;
+                    invLabels.style.width = inventoryFrame.style.width;
+                }
+                const moneyDisplay = document.querySelector('.money-display');
+                if (moneyDisplay) {
+                    moneyDisplay.style.top = (parseInt(moneyCounter.style.top) + 28) + 'px';
+                    moneyDisplay.style.right = (parseInt(moneyCounter.style.right) + 45) + 'px';
+                }
+                const saveIcon = document.getElementById('save-icon');
+                if (saveIcon) {
+                    saveIcon.style.top = moneyCounter.style.top;
+                    saveIcon.style.right = (parseInt(moneyCounter.style.right) + parseInt(moneyCounter.style.width) + 10) + 'px';
+                }
+                const newHudIcon = document.getElementById('new-hud-icon');
+                if (newHudIcon) {
+                    newHudIcon.style.top = (parseInt(inventoryFrame.style.top) + 190) + 'px';
+                    newHudIcon.style.left = inventoryFrame.style.left;
+                    newHudIcon.style.width = (parseInt(inventoryFrame.style.width) * 0.5) + 'px';
+                }
+            }
+
+            // Restore UI
+            updateInventoryUI();
+
+            // Restore Character
+            currentWaypointIndex = state.waypoint || 0;
+            const wp = waypoints[currentWaypointIndex];
+            character.style.left = wp.x + '%';
+            character.style.top = wp.y + '%';
+            updateCurrentWaypoint();
+
+            showTabletStatusNotification("Partida Cargada");
+            toggleSaveMenu();
+            if (isHudEditorActive) updateHudInputs();
+        }
+
+        function showTabletStatusNotification(msg) {
+            const label = document.createElement('div');
+            label.className = 'gain-notification';
+            label.style.color = '#0ff';
+            label.textContent = msg;
+            document.body.appendChild(label);
+            setTimeout(() => label.remove(), 1500);
+        }
+
+        // --- NEW: Tablet Direct Interaction (Move & Resize) ---
+        const tabletResizeHandle = document.querySelector('.tablet-resize');
+
+        function startTabletDrag(e) {
+            if (isHudEditorActive) return; // Managed by editor system if active
+            if (e.target === tabletCloseBtn) return;
+
+            const coords = (e.touches && e.touches[0]) ? e.touches[0] : e;
+            hudDragStartX = coords.clientX;
+            hudDragStartY = coords.clientY;
+
+            const style = window.getComputedStyle(tabletWindow);
+            hudStartTop = parseFloat(style.top) || 0;
+            hudStartLeft = parseFloat(style.left) || 0;
+            hudStartWidth = parseFloat(style.width) || 225;
+
+            if (e.target === tabletResizeHandle) {
+                isResizingTablet = true;
+                tabletWindow.classList.add('resizing');
+            } else {
+                isDraggingTabletDirect = true;
+                tabletWindow.classList.add('dragging');
+            }
+        }
+
+        tabletWindow.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            startTabletDrag(e);
+        });
+
+        tabletWindow.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            startTabletDrag(e);
+        }, { passive: false });
+
+
+
+        // Sell Button Logic
+        sellButton.onclick = function (e) {
+            if (isHudEditorActive || isMoving) return;
+            e.stopPropagation();
+
+            if (inventory.skateboards > 0) {
+                // Change to pressed image briefly
+                sellButton.src = "Assets/presionado.png";
+                setTimeout(() => { sellButton.src = "Assets/sin presionar.png"; }, 200);
+
+                isPendingSale = true;
+                moveToWaypoint(2); // Move to Point of Sale
+            } else {
+                console.log("No tienes patinetas para vender.");
+            }
+        };
+
+        // Open HUD editor with Ctrl+H
+        window.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'h') {
+                e.preventDefault();
+                toggleHudEditor();
+            }
+        });
+
+        function toggleHudEditor() {
+            isHudEditorActive = !isHudEditorActive;
+            hudEditor.style.display = isHudEditorActive ? 'block' : 'none';
+
+            const saveIcon = document.getElementById('save-icon');
+            const newHudIcon = document.getElementById('new-hud-icon');
+
+            if (isHudEditorActive) {
+                moneyCounter.classList.add('editable');
+                inventoryFrame.classList.add('editable');
+                sellButton.classList.add('editable');
+                tabletWindow.classList.add('editable');
+                tabletWindow.style.display = 'block';
+
+                document.querySelectorAll('.accumulation-label').forEach(label => {
+                    label.classList.add('editable');
+                });
+                updateAccumulationLabels();
+                updateHudInputs();
+            } else {
+                moneyCounter.classList.remove('editable');
+                inventoryFrame.classList.remove('editable');
+                sellButton.classList.remove('editable');
+                tabletWindow.classList.remove('editable');
+                tabletWindow.style.display = 'none';
+
+                document.querySelectorAll('.accumulation-label').forEach(label => {
+                    label.classList.remove('editable');
+                });
+                updateAccumulationLabels();
+            }
+            if (saveIcon) isHudEditorActive ? saveIcon.classList.add('editable') : saveIcon.classList.remove('editable');
+            if (newHudIcon) isHudEditorActive ? newHudIcon.classList.add('editable') : newHudIcon.classList.remove('editable');
+        }
+
+        tabletMesaSelect.onchange = () => {
+            currentEditingMesa = tabletMesaSelect.value;
+            const pos = getMesaTabletPos(currentEditingMesa);
+
+            tabWidthInput.value = pos.width;
+            tabTopInput.value = pos.top;
+            tabLeftInput.value = pos.left;
+
+            // Preview selected mesa position
+            tabletWindow.style.top = pos.top + 'px';
+            tabletWindow.style.left = pos.left + 'px';
+            tabletWindow.style.width = pos.width + 'px';
+        };
+
+        const accTopInput = document.getElementById('acc-top');
+        const accLeftInput = document.getElementById('acc-left');
+        const accLabelEditor = document.getElementById('acc-label-editor');
+
+        function updateHudInputs() {
+            // Money counter
+            hudWidthInput.value = Math.round(parseFloat(moneyCounter.style.width));
+            hudTopInput.value = Math.round(parseFloat(moneyCounter.style.top));
+            hudRightInput.value = Math.round(parseFloat(moneyCounter.style.right));
+
+            // Inventory
+            invWidthInput.value = Math.round(parseFloat(inventoryFrame.style.width));
+            invTopInput.value = Math.round(parseFloat(inventoryFrame.style.top));
+            invLeftInput.value = Math.round(parseFloat(inventoryFrame.style.left));
+
+            // Sell Button
+            sellWidthInput.value = Math.round(parseFloat(sellButton.style.width));
+            sellBottomInput.value = Math.round(parseFloat(sellButton.style.bottom));
+            sellRightInput.value = Math.round(parseFloat(sellButton.style.right));
+
+            // Tablet
+            const mesaId = tabletMesaSelect.value;
+            const pos = tabletPositions[mesaId];
+            tabWidthInput.value = Math.round(pos.width);
+            tabTopInput.value = Math.round(pos.top);
+            tabLeftInput.value = Math.round(pos.left);
+
+            // Accumulation Label
+            if (mesaId !== "2") { // Punto de venta doesn't have a production label
+                accLabelEditor.style.display = 'block';
+                const accPos = accumulationLabelPositions[mesaId];
+                accTopInput.value = parseFloat(accPos.top);
+                accLeftInput.value = parseFloat(accPos.left);
+            } else {
+                accLabelEditor.style.display = 'none';
+            }
+        }
+
+        // Apply HUD position
+        applyHudBtn.onclick = () => {
+            // Apply Money Counter
+            // Apply Money Counter
+            moneyCounter.style.width = hudWidthInput.value + 'px';
+            moneyCounter.style.top = hudTopInput.value + 'px';
+            moneyCounter.style.right = hudRightInput.value + 'px';
+
+            // Apply Inventory Frame
+            inventoryFrame.style.width = invWidthInput.value + 'px';
+            inventoryFrame.style.top = invTopInput.value + 'px';
+            inventoryFrame.style.left = invLeftInput.value + 'px';
+
+            // Sync Inventory Labels
+            const invLabels = document.getElementById('inventory-labels');
+            if (invLabels) {
+                invLabels.style.top = invTopInput.value + 'px';
+                invLabels.style.left = invLeftInput.value + 'px';
+                invLabels.style.width = invWidthInput.value + 'px';
+            }
+
+            // Apply Sell Button
+            sellButton.style.width = sellWidthInput.value + 'px';
+            sellButton.style.bottom = sellBottomInput.value + 'px';
+            sellButton.style.right = sellRightInput.value + 'px';
+
+            // Also move money display if counter moves
+            const moneyDisplay = document.querySelector('.money-display');
+            if (moneyDisplay) {
+                moneyDisplay.style.top = (parseInt(hudTopInput.value) + 28) + 'px';
+                moneyDisplay.style.right = (parseInt(hudRightInput.value) + 45) + 'px';
+            }
+
+            // Move save icon next to money counter
+            const saveIcon = document.getElementById('save-icon');
+            if (saveIcon) {
+                saveIcon.style.top = hudTopInput.value + 'px';
+                saveIcon.style.right = (parseInt(hudRightInput.value) + parseInt(hudWidthInput.value) + 10) + 'px';
+            }
+
+            // Move new HUD icon below inventory frame
+            const newHudIcon = document.getElementById('new-hud-icon');
+            if (newHudIcon) {
+                newHudIcon.style.top = (parseInt(invTopInput.value) + 190) + 'px';
+                newHudIcon.style.left = invLeftInput.value + 'px';
+                newHudIcon.style.width = (parseInt(invWidthInput.value) * 0.5) + 'px';
+            }
+
+            // Apply Tablet to current selected mesa ONLY IF it was tweaked or user wants to save this specific spot
+            // (Setting it here makes it a "static" position for that mesa)
+            tabletPositions[currentEditingMesa] = {
+                width: parseInt(tabWidthInput.value),
+                top: parseInt(tabTopInput.value),
+                left: parseInt(tabLeftInput.value)
+            };
+
+            // Apply Accumulation Label
+            const mesaId = tabletMesaSelect.value;
+            if (mesaId !== "2") {
+                accumulationLabelPositions[mesaId] = {
+                    top: accTopInput.value + '%',
+                    left: accLeftInput.value + '%'
+                };
+                updateAccumulationLabels();
+            }
+
+            const hudData = {
+                money: {
+                    width: parseInt(hudWidthInput.value),
+                    top: parseInt(hudTopInput.value),
+                    right: parseInt(hudRightInput.value)
+                },
+                inventory: {
+                    width: parseInt(invWidthInput.value),
+                    top: parseInt(invTopInput.value),
+                    left: parseInt(invLeftInput.value)
+                },
+                sell: {
+                    width: parseInt(sellWidthInput.value),
+                    bottom: parseInt(sellBottomInput.value),
+                    right: parseInt(sellRightInput.value)
+                },
+                tabletPositions: tabletPositions,
+                accumulationLabelPositions: accumulationLabelPositions
+            };
+
+            hudOutput.textContent = JSON.stringify(hudData, null, 2);
+            hudOutput.style.display = 'block';
+        };
+
+        closeHudBtn.onclick = () => {
+            toggleHudEditor();
+        };
+
+        // Drag HUD elements
+        function setupDraggable(element, type) {
+            function startDrag(e) {
+                if (!isHudEditorActive) return;
+                e.stopPropagation();
+                if (e.type === 'mousedown') e.preventDefault();
+
+                const coords = (e.touches && e.touches[0]) ? e.touches[0] : e;
+                isDraggingHud = true;
+                dragTarget = type;
+                hudDragStartX = coords.clientX;
+                hudDragStartY = coords.clientY;
+
+                if (type === 'money') {
+                    hudStartTop = parseFloat(moneyCounter.style.top) || 20;
+                    hudStartRight = parseFloat(moneyCounter.style.right) || 20;
+                } else if (type === 'tablet') {
+                    hudStartTop = parseFloat(tabletWindow.style.top) || 100;
+                    hudStartLeft = parseFloat(tabletWindow.style.left) || 100;
+                } else if (type.startsWith('acc-')) {
+                    const mesaId = type.split('-')[1];
+                    const pos = accumulationLabelPositions[mesaId];
+                    hudStartTop = parseFloat(pos.top);
+                    hudStartLeft = parseFloat(pos.left);
+                } else {
+                    hudStartBottom = parseFloat(sellButton.style.bottom) || 20;
+                    hudStartRight = parseFloat(sellButton.style.right) || 20;
+                    hudStartTop = parseFloat(element.style.top);
+                    hudStartLeft = parseFloat(element.style.left);
+                }
+            }
+
+            element.addEventListener('mousedown', startDrag);
+            element.addEventListener('touchstart', startDrag, { passive: false });
+        }
+
+        setupDraggable(moneyCounter, 'money');
+        setupDraggable(inventoryFrame, 'inventory');
+        setupDraggable(sellButton, 'sell');
+        setupDraggable(tabletWindow, 'tablet');
+
+        function handleUIMove(e) {
+            if (!isDraggingHud && !isDraggingTabletDirect && !isResizingTablet) return;
+            if (e.type === 'mousemove' || e.type === 'touchmove') {
+                if (!e.touches || e.touches.length <= 1) e.preventDefault();
+            }
+
+            const coords = (e.touches && e.touches[0]) ? e.touches[0] : e;
+            const deltaX = coords.clientX - hudDragStartX;
+            const deltaY = coords.clientY - hudDragStartY;
+
+            // Handle Tablet Direct Drag/Resize
+            if (isDraggingTabletDirect) {
+                const newTop = hudStartTop + deltaY;
+                const newLeft = hudStartLeft + deltaX;
+                tabletWindow.style.top = Math.max(0, newTop) + 'px';
+                tabletWindow.style.left = Math.max(0, newLeft) + 'px';
+            } else if (isResizingTablet) {
+                const newWidth = hudStartWidth + deltaX;
+                tabletWindow.style.width = Math.max(200, newWidth) + 'px';
+            }
+
+            // Handle HUD Editor Drag
+            if (isDraggingHud) {
+                if (dragTarget === 'money') {
+                    const newTop = hudStartTop + deltaY;
+                    const newRight = hudStartRight - deltaX;
+                    moneyCounter.style.top = Math.max(0, newTop) + 'px';
+                    moneyCounter.style.right = Math.max(0, newRight) + 'px';
+
+                    const moneyDisplay = document.querySelector('.money-display');
+                    if (moneyDisplay) {
+                        moneyDisplay.style.top = (Math.max(0, newTop) + 28) + 'px';
+                        moneyDisplay.style.right = (Math.max(0, newRight) + 45) + 'px';
+                    }
+                } else if (dragTarget === 'inventory') {
+                    const newTop = hudStartTop + deltaY;
+                    const newLeft = hudStartLeft + deltaX;
+                    inventoryFrame.style.top = Math.max(0, newTop) + 'px';
+                    inventoryFrame.style.left = Math.max(0, newLeft) + 'px';
+
+                    const invLabels = document.getElementById('inventory-labels');
+                    if (invLabels) {
+                        invLabels.style.top = Math.max(0, newTop) + 'px';
+                        invLabels.style.left = Math.max(0, newLeft) + 'px';
+                    }
+                } else if (dragTarget === 'sell') {
+                    const newBottom = hudStartBottom - deltaY;
+                    const newRight = hudStartRight - deltaX;
+                    sellButton.style.bottom = Math.max(0, newBottom) + 'px';
+                    sellButton.style.right = Math.max(0, newRight) + 'px';
+                } else if (dragTarget === 'tablet') {
+                    const newTop = hudStartTop + deltaY;
+                    const newLeft = hudStartLeft + deltaX;
+                    tabletWindow.style.top = Math.max(0, newTop) + 'px';
+                    tabletWindow.style.left = Math.max(0, newLeft) + 'px';
+                } else if (dragTarget && dragTarget.startsWith('acc-')) {
+                    const mesaId = dragTarget.split('-')[1];
+                    const newTop = hudStartTop + (deltaY / viewport.clientHeight * 100);
+                    const newLeft = hudStartLeft + (deltaX / viewport.clientWidth * 100);
+
+                    const label = document.getElementById(`acc-label-${mesaId}`);
+                    if (label) {
+                        label.style.top = newTop + '%';
+                        label.style.left = newLeft + '%';
+                        accumulationLabelPositions[mesaId].top = newTop + '%';
+                        accumulationLabelPositions[mesaId].left = newLeft + '%';
+                    }
+                }
+            }
+
+            // Global Sync for Tablet Position data
+            if (activeTabletMesaIndex !== null && (isDraggingTabletDirect || isResizingTablet || (isDraggingHud && dragTarget === 'tablet'))) {
+                tabletPositions[activeTabletMesaIndex] = {
+                    top: parseFloat(tabletWindow.style.top),
+                    left: parseFloat(tabletWindow.style.left),
+                    width: parseFloat(tabletWindow.style.width)
+                };
+            }
+
+            updateHudInputs();
+        }
+
+        window.addEventListener('mousemove', handleUIMove);
+        window.addEventListener('touchmove', handleUIMove, { passive: false });
+
+        function handleUIEnd() {
+            isDraggingHud = false;
+            isDraggingTabletDirect = false;
+            isResizingTablet = false;
+            tabletWindow.classList.remove('dragging');
+            tabletWindow.classList.remove('resizing');
+        }
+
+        window.addEventListener('mouseup', handleUIEnd);
+        window.addEventListener('touchend', handleUIEnd);
+
+        // Update values on input change
+        [hudWidthInput, hudTopInput, hudRightInput, invWidthInput, invTopInput, invLeftInput, sellWidthInput, sellBottomInput, sellRightInput, tabWidthInput, tabTopInput, tabLeftInput].forEach(input => {
+            input.addEventListener('input', () => {
+                moneyCounter.style.width = hudWidthInput.value + 'px';
+                moneyCounter.style.top = hudTopInput.value + 'px';
+                moneyCounter.style.right = hudRightInput.value + 'px';
+
+                inventoryFrame.style.width = invWidthInput.value + 'px';
+                inventoryFrame.style.top = invTopInput.value + 'px';
+                inventoryFrame.style.left = invLeftInput.value + 'px';
+
+                sellButton.style.bottom = sellBottomInput.value + 'px';
+                sellButton.style.right = sellRightInput.value + 'px';
+
+                // Sync money display
+                const moneyDisplay = document.querySelector('.money-display');
+                if (moneyDisplay) {
+                    moneyDisplay.style.top = (parseInt(hudTopInput.value) + 28) + 'px';
+                    moneyDisplay.style.right = (parseInt(hudRightInput.value) + 45) + 'px';
+                }
+
+                // Update current tablet settings
+                tabletWindow.style.width = tabWidthInput.value + 'px';
+                tabletWindow.style.top = tabTopInput.value + 'px';
+                tabletWindow.style.left = tabLeftInput.value + 'px';
+
+                tabletPositions[currentEditingMesa] = {
+                    width: parseInt(tabWidthInput.value),
+                    top: parseInt(tabTopInput.value),
+                    left: parseInt(tabLeftInput.value)
+                };
+            });
+        });
+
+        function bootstrapAutomation() {
+            Object.keys(mesaEmployees).forEach(id => {
+                if (mesaEmployees[id]) startAutomationForMesa(id);
+            });
+            updateAccumulationLabels();
+        }
+
+        // --- Command Console Logic ---
+        const commandInput = document.getElementById('command-input');
+
+        commandInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                const cmd = commandInput.value.trim().toLowerCase();
+                commandInput.value = '';
+
+                if (cmd === '/quieroserrico') {
+                    playerMoney += 50000;
+                    updateInventoryUI();
+                    showTabletStatusNotification("¡Trampa activada! +$50,000");
+                } else if (cmd !== '') {
+                    showTabletStatusNotification("Comando no reconocido");
+                }
+            }
+        };
+
+        // Open console with / or C key
+        window.addEventListener('keydown', (e) => {
+            if (isHudEditorActive) return;
+
+            // Focus input if / is pressed
+            if (e.key === '/' || (e.key.toLowerCase() === 'c' && document.activeElement !== commandInput)) {
+                if (document.activeElement !== commandInput) {
+                    // Avoid typing the "/" itself into the input if handled here
+                    if (e.key === '/') {
+                        e.preventDefault();
+                        commandInput.focus();
+                        commandInput.value = '/';
+                    } else {
+                        commandInput.focus();
+                    }
+                }
+            }
+        });
+
+        // Blur command input when tapping elsewhere
+        window.addEventListener('touchstart', (e) => {
+            if (document.activeElement === commandInput) {
+                const consoleEl = document.getElementById('command-console');
+                if (!consoleEl.contains(e.target)) {
+                    commandInput.blur();
+                }
+            }
+        }, { passive: true });
+
+        // Initialize
+        function initGame() {
+            try {
+                // alert("Iniciando juego..."); // Debug flag
+                updateInventoryUI();
+                bootstrapAutomation();
+                setTimeout(() => {
+                    const wp = waypoints[0];
+                    if (character && waypoints.length > 0) {
+                        character.style.left = wp.x + '%';
+                        character.style.top = wp.y + '%';
+                    }
+                }, 500);
+
+                // Handle Recipe Modal
+                const recipeModal = document.getElementById('recipe-modal');
+                const closeRecipeBtn = document.getElementById('close-recipe');
+
+                function closeRecipe() {
+                    if (recipeModal) {
+                        recipeModal.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                        recipeModal.style.opacity = '0';
+                        recipeModal.style.transform = 'scale(1.1)';
+                        setTimeout(() => {
+                            recipeModal.style.display = 'none';
+                        }, 500);
+                    }
+                }
+
+                if (closeRecipeBtn) {
+                    closeRecipeBtn.onclick = closeRecipe;
+                    closeRecipeBtn.ontouchstart = (e) => {
+                        e.preventDefault();
+                        closeRecipe();
+                    };
+                }
+            } catch (e) {
+                alert("Error iniciando juego: " + e.message);
+                console.error(e);
+            }
+        }
+
+        // Run initialization immediately as script is at the bottom
+        initGame();
+    </script>
+</body>
+
+</html>
