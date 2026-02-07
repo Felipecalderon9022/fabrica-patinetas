@@ -1290,6 +1290,12 @@
     </div>
 
     <script>
+        window.onerror = function (msg, url, lineNo, columnNo, error) {
+            alert("Error Critico: " + msg + "\nLinea: " + lineNo);
+            return false;
+        };
+    </script>
+    <script>
         const viewport = document.getElementById('viewport');
         const layer = document.getElementById('scene-layer');
         const bgImg = document.getElementById('background-image');
@@ -1973,23 +1979,30 @@
                 updateInventoryUI();
             }
 
+            const targetMesa = activeTabletMesaIndex; // Capture index
+
             isProducing = true;
             fabricarBtn.disabled = true;
             mejorarBtn.disabled = true;
             tabletStatusEl.textContent = "Fabricando...";
-            const prodTime = getProductionTime(activeTabletMesaIndex);
+            const prodTime = getProductionTime(targetMesa);
             progressBarEl.style.transition = `width ${prodTime}ms linear`;
             setTimeout(() => { progressBarEl.style.width = '100%'; }, 10);
 
             setTimeout(() => {
-                if (activeTabletMesaIndex === null) return;
-                executeProduction(activeTabletMesaIndex);
-                progressBarEl.style.transition = 'none';
-                progressBarEl.style.width = '0%';
+                // Ensure we use the captured index so production finishes even if tablet closes
+                executeProduction(targetMesa);
+
+                // Only update tablet UI if it's strictly the same mesa open
+                if (activeTabletMesaIndex === targetMesa) {
+                    progressBarEl.style.transition = 'none';
+                    progressBarEl.style.width = '0%';
+                    fabricarBtn.disabled = false;
+                    updateUpgradeUI();
+                    tabletStatusEl.textContent = config.reqs ? "Listo para ensamblar" : "Listo para fabricar";
+                }
+
                 isProducing = false;
-                fabricarBtn.disabled = false;
-                updateUpgradeUI();
-                tabletStatusEl.textContent = config.reqs ? "Listo para ensamblar" : "Listo para fabricar";
             }, prodTime);
         });
 
@@ -2121,7 +2134,7 @@
             if (!config) return;
 
             // Requirements check for automated workers (silent check)
-            if (config.reqs) {
+            if (isAuto && config.reqs) {
                 if (inventory.wheels < config.reqs.wheels ||
                     inventory.axles < config.reqs.axles ||
                     inventory.decks < config.reqs.decks) {
@@ -2815,7 +2828,7 @@
         // Initialize
         function initGame() {
             try {
-                // alert("Iniciando juego..."); // Debug flag
+                // alert("Iniciando juego..."); // Debug flag removed
                 updateInventoryUI();
                 bootstrapAutomation();
                 setTimeout(() => {
