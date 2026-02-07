@@ -1851,6 +1851,66 @@
         let isResizingTablet = false;
         let isDraggingTabletDirect = false;
 
+        function showTablet(wpIndex) {
+            activeTabletMesaIndex = wpIndex;
+            const savedPos = getMesaTabletPos(wpIndex);
+            const pos = savedPos || getDynamicCenterPos();
+
+            tabletWindow.style.top = pos.top + 'px';
+            tabletWindow.style.left = pos.left + 'px';
+            tabletWindow.style.width = pos.width + 'px';
+            tabletWindow.style.display = 'block';
+
+            progressBarEl.style.transition = 'none';
+            progressBarEl.style.width = '0%';
+            isProducing = false;
+            fabricarBtn.disabled = false;
+
+            const config = mesaConfig[wpIndex];
+            if (config) {
+                mesaTitleEl.textContent = config.name;
+                tabletStatusEl.textContent = config.reqs ?
+                    `Requiere: ${config.reqs.wheels} Ruedas, ${config.reqs.axles} Ejes, ${config.reqs.decks} Tabla` :
+                    "Listo para fabricar";
+                fabricarBtn.style.display = 'block';
+                updateUpgradeUI();
+            } else {
+                mesaTitleEl.textContent = "Punto de Interés";
+                tabletStatusEl.textContent = "No hay tareas aquí.";
+                fabricarBtn.style.display = 'none';
+                const upInfo = document.getElementById('upgrade-info');
+                const mInfo = document.getElementById('mold-info');
+                if (upInfo) upInfo.style.display = 'none';
+                if (mInfo) mInfo.style.display = 'none';
+            }
+        }
+
+        const moldLvlEl = document.getElementById('mold-lvl');
+        const moldCostEl = document.getElementById('mold-cost');
+        const mejorarMoldeBtn = document.getElementById('mejorar-molde-btn');
+
+        function updateUpgradeUI() {
+            if (activeTabletMesaIndex === null) return;
+
+            const lvl = mesaUpgrades[activeTabletMesaIndex] || 0;
+            const cost = getUpgradeCost(lvl);
+            const moldLvl = mesaMoldUpgrades[activeTabletMesaIndex] || 0;
+            const moldCost = getMoldUpgradeCost(moldLvl);
+
+            if (upgradeLvlEl) upgradeLvlEl.textContent = lvl;
+            if (upgradeCostEl) upgradeCostEl.textContent = cost;
+            if (moldLvlEl) moldLvlEl.textContent = moldLvl;
+            if (moldCostEl) moldCostEl.textContent = moldCost;
+
+            const upInfo = document.getElementById('upgrade-info');
+            const mInfo = document.getElementById('mold-info');
+            if (upInfo) upInfo.style.display = 'block';
+            if (mInfo) mInfo.style.display = 'block';
+
+            mejorarBtn.disabled = playerMoney < cost || isProducing;
+            mejorarMoldeBtn.disabled = playerMoney < moldCost || isProducing;
+        }
+
         function addButtonListener(btn, callback) {
             if (!btn) return;
             const handler = (e) => {
@@ -1866,6 +1926,26 @@
             tabletWindow.style.display = 'none';
             activeTabletMesaIndex = null;
         });
+
+        // Close tablet when clicking outside
+        window.addEventListener('mousedown', (e) => {
+            if (isHudEditorActive) return;
+            if (tabletWindow.style.display === 'block' && !tabletWindow.contains(e.target)) {
+                tabletWindow.style.display = 'none';
+                activeTabletMesaIndex = null;
+            }
+        });
+
+        window.addEventListener('touchstart', (e) => {
+            if (isHudEditorActive) return;
+            if (tabletWindow.style.display === 'block' && !tabletWindow.contains(e.target)) {
+                // Only close if not clicking a hitbox
+                if (!e.target.classList.contains('hitbox')) {
+                    tabletWindow.style.display = 'none';
+                    activeTabletMesaIndex = null;
+                }
+            }
+        }, { passive: true });
 
         addButtonListener(fabricarBtn, () => {
             const config = mesaConfig[activeTabletMesaIndex];
@@ -2748,11 +2828,7 @@
                 }, 500);
             }
 
-            closeRecipeBtn.onclick = closeRecipe;
-            closeRecipeBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                closeRecipe();
-            }, { passive: false });
+            addButtonListener(closeRecipeBtn, closeRecipe);
         }
 
         // Run initialization immediately as script is at the bottom
