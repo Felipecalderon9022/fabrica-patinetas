@@ -1690,6 +1690,14 @@
 
         const tabletWindow = document.getElementById('tablet-window');
         const tabletCloseBtn = document.querySelector('.tablet-close');
+        const saveIcon = document.getElementById('save-icon');
+        const saveMenu = document.getElementById('save-menu');
+        const btnSaveGame = document.getElementById('btn-save-game');
+        const btnCloseSave = document.getElementById('close-save-menu');
+        const employeeMenu = document.getElementById('employee-menu');
+        const closeEmployeeMenu = document.getElementById('close-employee-menu');
+        const newHudIcon = document.getElementById('new-hud-icon');
+
         const tabletMesaSelect = document.getElementById('tablet-mesa-select');
         const tabWidthInput = document.getElementById('tab-width');
         const tabTopInput = document.getElementById('tab-top');
@@ -1804,7 +1812,6 @@
         const countAxlesEl = document.getElementById('count-axles');
         const countDecksEl = document.getElementById('count-decks');
         const countSkateboardsEl = document.getElementById('count-skateboards');
-        const moneyTextEl = document.querySelector('.money-text'); // I'll check if this selector is correct, or update it
 
         function updateInventoryUI() {
             countWheelsEl.textContent = inventory.wheels;
@@ -2828,7 +2835,13 @@
                 }, 500);
             }
 
-            addButtonListener(closeRecipeBtn, closeRecipe);
+            if (closeRecipeBtn) {
+                closeRecipeBtn.onclick = closeRecipe;
+                closeRecipeBtn.ontouchstart = (e) => {
+                    e.preventDefault();
+                    closeRecipe();
+                };
+            }
         }
 
         // Run initialization immediately as script is at the bottom
