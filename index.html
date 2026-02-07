@@ -217,6 +217,25 @@
             cursor: move;
         }
 
+        /* Mobile specific adjustments */
+        @media (max-width: 768px) {
+            #sell-button {
+                bottom: 80px !important;
+                /* Move it up above mobile browser bars */
+                right: 50% !important;
+                left: auto !important;
+                transform: translateX(50%) !important;
+                /* Center it - note: right: 50% + translateX(50%) centers it */
+                width: 140px;
+            }
+
+            #command-console {
+                bottom: 15px;
+                left: 10px;
+                width: 120px;
+            }
+        }
+
         #inventory-frame {
             position: absolute;
             top: 20px;
@@ -2695,6 +2714,16 @@
                 }
             }
         });
+
+        // Blur command input when tapping elsewhere
+        window.addEventListener('touchstart', (e) => {
+            if (document.activeElement === commandInput) {
+                const consoleEl = document.getElementById('command-console');
+                if (!consoleEl.contains(e.target)) {
+                    commandInput.blur();
+                }
+            }
+        }, { passive: true });
 
         // Initialize
         function initGame() {
