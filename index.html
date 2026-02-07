@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Taller Interactivo</title>
     <style>
         body,
@@ -24,6 +25,7 @@
             overflow: hidden;
             cursor: grab;
             position: relative;
+            touch-action: none;
         }
 
         #viewport:active {
@@ -1345,6 +1347,8 @@
         let panStartX = 0, panStartY = 0;
         let dragThreshold = 5;
         let hasMoved = false;
+        let initialTouchDistance = 0;
+        let initialScale = 1;
 
         let currentWaypointIndex = 0;
         let isMoving = false;
@@ -1571,6 +1575,73 @@
                 setSceneTransform();
             }
         }
+
+        // --- Touch Handling ---
+        viewport.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                // Start Panning
+                const touch = e.touches[0];
+                startX = touch.clientX;
+                startY = touch.clientY;
+                isDragging = true;
+                hasMoved = false;
+                panStartX = touch.clientX - pointX;
+                panStartY = touch.clientY - pointY;
+            } else if (e.touches.length === 2) {
+                // Start Pinching
+                isDragging = false;
+                initialTouchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                initialScale = scale;
+            }
+        }, { passive: false });
+
+        viewport.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 1 && isDragging) {
+                // Panning
+                const touch = e.touches[0];
+                const dist = Math.hypot(touch.clientX - startX, touch.clientY - startY);
+                if (dist > dragThreshold) hasMoved = true;
+
+                if (hasMoved) {
+                    pointX = touch.clientX - panStartX;
+                    pointY = touch.clientY - panStartY;
+                    setSceneTransform();
+                }
+            } else if (e.touches.length === 2) {
+                // Pinch to Zoom
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+
+                if (initialTouchDistance > 0) {
+                    const ratio = currentDistance / initialTouchDistance;
+                    const newScale = Math.min(Math.max(0.1, initialScale * ratio), 30);
+
+                    if (newScale !== scale) {
+                        const rect = viewport.getBoundingClientRect();
+                        const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                        const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+                        const xs = (centerX - pointX) / scale;
+                        const ys = (centerY - pointY) / scale;
+
+                        pointX = centerX - xs * newScale;
+                        pointY = centerY - ys * newScale;
+                        scale = newScale;
+                        setSceneTransform();
+                    }
+                }
+            }
+        }, { passive: false });
+
+        viewport.addEventListener('touchend', (e) => {
+            isDragging = false;
+            initialTouchDistance = 0;
+        });
 
         // --- HUD Editor System ---
         const moneyCounter = document.getElementById('money-counter');
@@ -2255,15 +2326,14 @@
         // --- NEW: Tablet Direct Interaction (Move & Resize) ---
         const tabletResizeHandle = document.querySelector('.tablet-resize');
 
-        tabletWindow.addEventListener('mousedown', (e) => {
+        function startTabletDrag(e) {
             if (isHudEditorActive) return; // Managed by editor system if active
             if (e.target === tabletCloseBtn) return;
 
-            e.preventDefault();
-            e.stopPropagation();
+            const coords = (e.touches && e.touches[0]) ? e.touches[0] : e;
+            hudDragStartX = coords.clientX;
+            hudDragStartY = coords.clientY;
 
-            hudDragStartX = e.clientX;
-            hudDragStartY = e.clientY;
             const style = window.getComputedStyle(tabletWindow);
             hudStartTop = parseFloat(style.top) || 0;
             hudStartLeft = parseFloat(style.left) || 0;
@@ -2276,45 +2346,20 @@
                 isDraggingTabletDirect = true;
                 tabletWindow.classList.add('dragging');
             }
+        }
+
+        tabletWindow.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            startTabletDrag(e);
         });
 
-        window.addEventListener('mousemove', (e) => {
-            if (!isDraggingTabletDirect && !isResizingTablet) return;
+        tabletWindow.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            startTabletDrag(e);
+        }, { passive: false });
 
-            const deltaX = e.clientX - hudDragStartX;
-            const deltaY = e.clientY - hudDragStartY;
 
-            if (isDraggingTabletDirect) {
-                const newTop = hudStartTop + deltaY;
-                const newLeft = hudStartLeft + deltaX;
-                tabletWindow.style.top = Math.max(0, newTop) + 'px';
-                tabletWindow.style.left = Math.max(0, newLeft) + 'px';
-            } else if (isResizingTablet) {
-                const newWidth = hudStartWidth + deltaX;
-                tabletWindow.style.width = Math.max(200, newWidth) + 'px';
-            }
-
-            // Sync with current mesa data if open
-            if (activeTabletMesaIndex !== null) {
-                tabletPositions[activeTabletMesaIndex] = {
-                    top: parseFloat(tabletWindow.style.top),
-                    left: parseFloat(tabletWindow.style.left),
-                    width: parseFloat(tabletWindow.style.width)
-                };
-                if (isHudEditorActive && currentEditingMesa == activeTabletMesaIndex) {
-                    updateHudInputs();
-                }
-            }
-        });
-
-        window.addEventListener('mouseup', () => {
-            if (isDraggingTabletDirect || isResizingTablet) {
-                isDraggingTabletDirect = false;
-                isResizingTablet = false;
-                tabletWindow.classList.remove('dragging');
-                tabletWindow.classList.remove('resizing');
-            }
-        });
 
         // Sell Button Logic
         sellButton.onclick = function (e) {
@@ -2524,15 +2569,16 @@
 
         // Drag HUD elements
         function setupDraggable(element, type) {
-            element.addEventListener('mousedown', (e) => {
+            function startDrag(e) {
                 if (!isHudEditorActive) return;
                 e.stopPropagation();
-                e.preventDefault();
+                if (e.type === 'mousedown') e.preventDefault();
 
+                const coords = (e.touches && e.touches[0]) ? e.touches[0] : e;
                 isDraggingHud = true;
                 dragTarget = type;
-                hudDragStartX = e.clientX;
-                hudDragStartY = e.clientY;
+                hudDragStartX = coords.clientX;
+                hudDragStartY = coords.clientY;
 
                 if (type === 'money') {
                     hudStartTop = parseFloat(moneyCounter.style.top) || 20;
@@ -2551,7 +2597,10 @@
                     hudStartTop = parseFloat(element.style.top);
                     hudStartLeft = parseFloat(element.style.left);
                 }
-            });
+            }
+
+            element.addEventListener('mousedown', startDrag);
+            element.addEventListener('touchstart', startDrag, { passive: false });
         }
 
         setupDraggable(moneyCounter, 'money');
@@ -2559,72 +2608,101 @@
         setupDraggable(sellButton, 'sell');
         setupDraggable(tabletWindow, 'tablet');
 
-        window.addEventListener('mousemove', (e) => {
-            if (!isDraggingHud) return;
-            e.preventDefault();
+        function handleUIMove(e) {
+            if (!isDraggingHud && !isDraggingTabletDirect && !isResizingTablet) return;
+            if (e.type === 'mousemove' || e.type === 'touchmove') {
+                if (!e.touches || e.touches.length <= 1) e.preventDefault();
+            }
 
-            const deltaX = e.clientX - hudDragStartX;
-            const deltaY = e.clientY - hudDragStartY;
+            const coords = (e.touches && e.touches[0]) ? e.touches[0] : e;
+            const deltaX = coords.clientX - hudDragStartX;
+            const deltaY = coords.clientY - hudDragStartY;
 
-            if (dragTarget === 'money') {
-                const newTop = hudStartTop + deltaY;
-                const newRight = hudStartRight - deltaX;
-                moneyCounter.style.top = Math.max(0, newTop) + 'px';
-                moneyCounter.style.right = Math.max(0, newRight) + 'px';
-
-                // Update money display position
-                const moneyDisplay = document.querySelector('.money-display');
-                if (moneyDisplay) {
-                    moneyDisplay.style.top = (Math.max(0, newTop) + 28) + 'px';
-                    moneyDisplay.style.right = (Math.max(0, newRight) + 45) + 'px';
-                }
-            } else if (dragTarget === 'inventory') {
-                const newTop = hudStartTop + deltaY;
-                const newLeft = hudStartLeft + deltaX;
-                inventoryFrame.style.top = Math.max(0, newTop) + 'px';
-                inventoryFrame.style.left = Math.max(0, newLeft) + 'px';
-
-                // Sync Inventory Labels
-                const invLabels = document.getElementById('inventory-labels');
-                if (invLabels) {
-                    invLabels.style.top = Math.max(0, newTop) + 'px';
-                    invLabels.style.left = Math.max(0, newLeft) + 'px';
-                }
-            } else if (dragTarget === 'sell') {
-                const newBottom = hudStartBottom - deltaY;
-                const newRight = hudStartRight - deltaX;
-                sellButton.style.bottom = Math.max(0, newBottom) + 'px';
-                sellButton.style.right = Math.max(0, newRight) + 'px';
-            } else if (dragTarget === 'tablet') {
+            // Handle Tablet Direct Drag/Resize
+            if (isDraggingTabletDirect) {
                 const newTop = hudStartTop + deltaY;
                 const newLeft = hudStartLeft + deltaX;
                 tabletWindow.style.top = Math.max(0, newTop) + 'px';
                 tabletWindow.style.left = Math.max(0, newLeft) + 'px';
+            } else if (isResizingTablet) {
+                const newWidth = hudStartWidth + deltaX;
+                tabletWindow.style.width = Math.max(200, newWidth) + 'px';
+            }
 
-                // Real-time update tablet positions data
-                tabletPositions[currentEditingMesa].top = Math.max(0, newTop);
-                tabletPositions[currentEditingMesa].left = Math.max(0, newLeft);
-            } else if (dragTarget.startsWith('acc-')) {
-                const mesaId = dragTarget.split('-')[1];
-                const newTop = hudStartTop + (deltaY / viewport.clientHeight * 100);
-                const newLeft = hudStartLeft + (deltaX / viewport.clientWidth * 100);
+            // Handle HUD Editor Drag
+            if (isDraggingHud) {
+                if (dragTarget === 'money') {
+                    const newTop = hudStartTop + deltaY;
+                    const newRight = hudStartRight - deltaX;
+                    moneyCounter.style.top = Math.max(0, newTop) + 'px';
+                    moneyCounter.style.right = Math.max(0, newRight) + 'px';
 
-                const label = document.getElementById(`acc-label-${mesaId}`);
-                if (label) {
-                    label.style.top = newTop + '%';
-                    label.style.left = newLeft + '%';
-                    accumulationLabelPositions[mesaId].top = newTop + '%';
-                    accumulationLabelPositions[mesaId].left = newLeft + '%';
-                    updateHudInputs();
+                    const moneyDisplay = document.querySelector('.money-display');
+                    if (moneyDisplay) {
+                        moneyDisplay.style.top = (Math.max(0, newTop) + 28) + 'px';
+                        moneyDisplay.style.right = (Math.max(0, newRight) + 45) + 'px';
+                    }
+                } else if (dragTarget === 'inventory') {
+                    const newTop = hudStartTop + deltaY;
+                    const newLeft = hudStartLeft + deltaX;
+                    inventoryFrame.style.top = Math.max(0, newTop) + 'px';
+                    inventoryFrame.style.left = Math.max(0, newLeft) + 'px';
+
+                    const invLabels = document.getElementById('inventory-labels');
+                    if (invLabels) {
+                        invLabels.style.top = Math.max(0, newTop) + 'px';
+                        invLabels.style.left = Math.max(0, newLeft) + 'px';
+                    }
+                } else if (dragTarget === 'sell') {
+                    const newBottom = hudStartBottom - deltaY;
+                    const newRight = hudStartRight - deltaX;
+                    sellButton.style.bottom = Math.max(0, newBottom) + 'px';
+                    sellButton.style.right = Math.max(0, newRight) + 'px';
+                } else if (dragTarget === 'tablet') {
+                    const newTop = hudStartTop + deltaY;
+                    const newLeft = hudStartLeft + deltaX;
+                    tabletWindow.style.top = Math.max(0, newTop) + 'px';
+                    tabletWindow.style.left = Math.max(0, newLeft) + 'px';
+                } else if (dragTarget && dragTarget.startsWith('acc-')) {
+                    const mesaId = dragTarget.split('-')[1];
+                    const newTop = hudStartTop + (deltaY / viewport.clientHeight * 100);
+                    const newLeft = hudStartLeft + (deltaX / viewport.clientWidth * 100);
+
+                    const label = document.getElementById(`acc-label-${mesaId}`);
+                    if (label) {
+                        label.style.top = newTop + '%';
+                        label.style.left = newLeft + '%';
+                        accumulationLabelPositions[mesaId].top = newTop + '%';
+                        accumulationLabelPositions[mesaId].left = newLeft + '%';
+                    }
                 }
             }
 
-            updateHudInputs();
-        });
+            // Global Sync for Tablet Position data
+            if (activeTabletMesaIndex !== null && (isDraggingTabletDirect || isResizingTablet || (isDraggingHud && dragTarget === 'tablet'))) {
+                tabletPositions[activeTabletMesaIndex] = {
+                    top: parseFloat(tabletWindow.style.top),
+                    left: parseFloat(tabletWindow.style.left),
+                    width: parseFloat(tabletWindow.style.width)
+                };
+            }
 
-        window.addEventListener('mouseup', () => {
+            updateHudInputs();
+        }
+
+        window.addEventListener('mousemove', handleUIMove);
+        window.addEventListener('touchmove', handleUIMove, { passive: false });
+
+        function handleUIEnd() {
             isDraggingHud = false;
-        });
+            isDraggingTabletDirect = false;
+            isResizingTablet = false;
+            tabletWindow.classList.remove('dragging');
+            tabletWindow.classList.remove('resizing');
+        }
+
+        window.addEventListener('mouseup', handleUIEnd);
+        window.addEventListener('touchend', handleUIEnd);
 
         // Update values on input change
         [hudWidthInput, hudTopInput, hudRightInput, invWidthInput, invTopInput, invLeftInput, sellWidthInput, sellBottomInput, sellRightInput, tabWidthInput, tabTopInput, tabLeftInput].forEach(input => {
