@@ -2814,33 +2814,43 @@
 
         // Initialize
         function initGame() {
-            updateInventoryUI();
-            bootstrapAutomation();
-            setTimeout(() => {
-                const wp = waypoints[0];
-                character.style.left = wp.x + '%';
-                character.style.top = wp.y + '%';
-            }, 500);
-
-            // Handle Recipe Modal
-            const recipeModal = document.getElementById('recipe-modal');
-            const closeRecipeBtn = document.getElementById('close-recipe');
-
-            function closeRecipe() {
-                recipeModal.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                recipeModal.style.opacity = '0';
-                recipeModal.style.transform = 'scale(1.1)';
+            try {
+                // alert("Iniciando juego..."); // Debug flag
+                updateInventoryUI();
+                bootstrapAutomation();
                 setTimeout(() => {
-                    recipeModal.style.display = 'none';
+                    const wp = waypoints[0];
+                    if (character && waypoints.length > 0) {
+                        character.style.left = wp.x + '%';
+                        character.style.top = wp.y + '%';
+                    }
                 }, 500);
-            }
 
-            if (closeRecipeBtn) {
-                closeRecipeBtn.onclick = closeRecipe;
-                closeRecipeBtn.ontouchstart = (e) => {
-                    e.preventDefault();
-                    closeRecipe();
-                };
+                // Handle Recipe Modal
+                const recipeModal = document.getElementById('recipe-modal');
+                const closeRecipeBtn = document.getElementById('close-recipe');
+
+                function closeRecipe() {
+                    if (recipeModal) {
+                        recipeModal.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                        recipeModal.style.opacity = '0';
+                        recipeModal.style.transform = 'scale(1.1)';
+                        setTimeout(() => {
+                            recipeModal.style.display = 'none';
+                        }, 500);
+                    }
+                }
+
+                if (closeRecipeBtn) {
+                    closeRecipeBtn.onclick = closeRecipe;
+                    closeRecipeBtn.ontouchstart = (e) => {
+                        e.preventDefault();
+                        closeRecipe();
+                    };
+                }
+            } catch (e) {
+                alert("Error iniciando juego: " + e.message);
+                console.error(e);
             }
         }
 
