@@ -1408,11 +1408,15 @@
                 hitbox.style.height = hb.height + '%';
                 hitbox.title = hb.name;
 
-                hitbox.onclick = (e) => {
+                const handleInteraction = (e) => {
                     e.stopPropagation();
-                    // Set both the goal and the intended tablet mesa
+                    if (e.type === 'touchstart') e.preventDefault();
+                    if (isDragging || hasMoved) return;
                     moveToWaypoint(hb.wpIndex, hb.wpIndex);
                 };
+
+                hitbox.addEventListener('click', handleInteraction);
+                hitbox.addEventListener('touchstart', handleInteraction, { passive: false });
 
                 hitboxesContainer.appendChild(hitbox);
             });
@@ -1828,100 +1832,26 @@
         let isResizingTablet = false;
         let isDraggingTabletDirect = false;
 
-        // Tablet Interaction
-        tabletCloseBtn.onclick = (e) => {
-            e.stopPropagation();
+        function addButtonListener(btn, callback) {
+            if (!btn) return;
+            const handler = (e) => {
+                e.stopPropagation();
+                if (e.type === 'touchstart') e.preventDefault();
+                callback(e);
+            };
+            btn.addEventListener('click', handler);
+            btn.addEventListener('touchstart', handler, { passive: false });
+        }
+
+        addButtonListener(tabletCloseBtn, () => {
             tabletWindow.style.display = 'none';
             activeTabletMesaIndex = null;
-        };
-
-        // Close tablet when clicking outside
-        window.addEventListener('mousedown', (e) => {
-            if (isHudEditorActive) return;
-            if (tabletWindow.style.display === 'block' && !tabletWindow.contains(e.target)) {
-                tabletWindow.style.display = 'none';
-            }
         });
 
-        function showTablet(wpIndex) {
-            activeTabletMesaIndex = wpIndex;
-
-            // Use saved position or calculate dynamic center on the fly
-            const savedPos = getMesaTabletPos(wpIndex);
-            const pos = savedPos || getDynamicCenterPos();
-
-            tabletWindow.style.top = pos.top + 'px';
-            tabletWindow.style.left = pos.left + 'px';
-            tabletWindow.style.width = pos.width + 'px';
-            tabletWindow.style.display = 'block';
-
-            // Reset manufacturing UI
-            progressBarEl.style.transition = 'none';
-            progressBarEl.style.width = '0%';
-            isProducing = false;
-            fabricarBtn.disabled = false;
-
-            const config = mesaConfig[wpIndex];
-            if (config) {
-                mesaTitleEl.textContent = config.name;
-                tabletStatusEl.textContent = config.reqs ?
-                    `Requiere: ${config.reqs.wheels} Ruedas, ${config.reqs.axles} Ejes, ${config.reqs.decks} Tabla` :
-                    "Listo para fabricar";
-                fabricarBtn.style.display = 'block';
-                updateUpgradeUI();
-            } else {
-                mesaTitleEl.textContent = "Punto de Interés";
-                tabletStatusEl.textContent = "No hay tareas aquí.";
-                fabricarBtn.style.display = 'none';
-                document.getElementById('upgrade-info').style.display = 'none';
-            }
-        }
-
-        const moldLvlEl = document.getElementById('mold-lvl');
-        const moldCostEl = document.getElementById('mold-cost');
-        const mejorarMoldeBtn = document.getElementById('mejorar-molde-btn');
-
-        function updateUpgradeUI() {
-            if (activeTabletMesaIndex === null) return;
-
-            const lvl = mesaUpgrades[activeTabletMesaIndex] || 0;
-            const cost = getUpgradeCost(lvl);
-
-            const moldLvl = mesaMoldUpgrades[activeTabletMesaIndex] || 0;
-            const moldCost = getMoldUpgradeCost(moldLvl);
-
-            upgradeLvlEl.textContent = lvl;
-            upgradeCostEl.textContent = cost;
-
-            moldLvlEl.textContent = moldLvl;
-            moldCostEl.textContent = moldCost;
-
-            document.getElementById('upgrade-info').style.display = 'block';
-            document.getElementById('mold-info').style.display = 'block';
-
-            mejorarBtn.disabled = playerMoney < cost || isProducing;
-            mejorarMoldeBtn.disabled = playerMoney < moldCost || isProducing;
-        }
-
-        mejorarMoldeBtn.onclick = () => {
-            const moldLvl = mesaMoldUpgrades[activeTabletMesaIndex] || 0;
-            const cost = getMoldUpgradeCost(moldLvl);
-
-            if (playerMoney >= cost) {
-                playerMoney -= cost;
-                mesaMoldUpgrades[activeTabletMesaIndex]++;
-                updateInventoryUI();
-                updateUpgradeUI();
-                console.log(`Mesa ${activeTabletMesaIndex} molde mejorado a nivel ${mesaMoldUpgrades[activeTabletMesaIndex]}`);
-                showTabletStatusNotification("Molde Mejorado (x2)");
-            }
-        };
-
-        fabricarBtn.onclick = () => {
+        addButtonListener(fabricarBtn, () => {
             const config = mesaConfig[activeTabletMesaIndex];
             if (!config || isProducing) return;
 
-            // Validate requirements for assembly
             if (config.reqs) {
                 if (inventory.wheels < config.reqs.wheels ||
                     inventory.axles < config.reqs.axles ||
@@ -1931,8 +1861,6 @@
                     setTimeout(() => { tabletStatusEl.style.color = "#000"; }, 1000);
                     return;
                 }
-
-                // Consume materials
                 inventory.wheels -= config.reqs.wheels;
                 inventory.axles -= config.reqs.axles;
                 inventory.decks -= config.reqs.decks;
@@ -1943,82 +1871,68 @@
             fabricarBtn.disabled = true;
             mejorarBtn.disabled = true;
             tabletStatusEl.textContent = "Fabricando...";
-
             const prodTime = getProductionTime(activeTabletMesaIndex);
-
-            // Start progress animation
             progressBarEl.style.transition = `width ${prodTime}ms linear`;
             setTimeout(() => { progressBarEl.style.width = '100%'; }, 10);
 
             setTimeout(() => {
-                if (activeTabletMesaIndex === null) return; // Closed or moved
-
+                if (activeTabletMesaIndex === null) return;
                 executeProduction(activeTabletMesaIndex);
-
                 progressBarEl.style.transition = 'none';
                 progressBarEl.style.width = '0%';
-
                 isProducing = false;
                 fabricarBtn.disabled = false;
-                updateUpgradeUI(); // Re-enable upgrade if affordable
+                updateUpgradeUI();
                 tabletStatusEl.textContent = config.reqs ? "Listo para ensamblar" : "Listo para fabricar";
             }, prodTime);
-        };
+        });
 
-        mejorarBtn.onclick = () => {
+        addButtonListener(mejorarBtn, () => {
             const cost = getUpgradeCost(mesaUpgrades[activeTabletMesaIndex]);
             if (playerMoney >= cost) {
                 playerMoney -= cost;
                 mesaUpgrades[activeTabletMesaIndex]++;
                 updateInventoryUI();
                 updateUpgradeUI();
-                console.log(`Mesa ${activeTabletMesaIndex} mejorada a nivel ${mesaUpgrades[activeTabletMesaIndex]}`);
             }
-        };
+        });
 
-        const saveIcon = document.getElementById('save-icon');
-        const saveMenu = document.getElementById('save-menu');
-        const saveListEl = document.getElementById('save-list');
-        const btnSaveGame = document.getElementById('btn-save-game');
-        const btnCloseSave = document.getElementById('close-save-menu');
+        addButtonListener(mejorarMoldeBtn, () => {
+            const moldLvl = mesaMoldUpgrades[activeTabletMesaIndex] || 0;
+            const cost = getMoldUpgradeCost(moldLvl);
+            if (playerMoney >= cost) {
+                playerMoney -= cost;
+                mesaMoldUpgrades[activeTabletMesaIndex]++;
+                updateInventoryUI();
+                updateUpgradeUI();
+                showTabletStatusNotification("Molde Mejorado (x2)");
+            }
+        });
 
-        if (saveIcon) {
-            saveIcon.onclick = () => {
-                if (isHudEditorActive) return;
-                toggleSaveMenu();
-            };
-        }
+        addButtonListener(saveIcon, () => {
+            if (isHudEditorActive) return;
+            toggleSaveMenu();
+        });
 
-        btnCloseSave.onclick = () => toggleSaveMenu();
+        addButtonListener(btnCloseSave, () => toggleSaveMenu());
 
-        function toggleSaveMenu() {
-            const isVisible = saveMenu.style.display === 'block';
-            saveMenu.style.display = isVisible ? 'none' : 'block';
-            if (!isVisible) refreshSaveList();
-        }
+        addButtonListener(btnSaveGame, () => saveCurrentGame());
 
-        btnSaveGame.onclick = () => {
-            saveCurrentGame();
-        };
+        addButtonListener(closeEmployeeMenu, () => toggleEmployeeMenu());
 
-        const employeeMenu = document.getElementById('employee-menu');
-        const closeEmployeeMenu = document.getElementById('close-employee-menu');
-        const newHudIcon = document.getElementById('new-hud-icon');
+        addButtonListener(newHudIcon, () => {
+            if (!isHudEditorActive) toggleEmployeeMenu();
+        });
 
-        function toggleEmployeeMenu() {
-            const isVisible = employeeMenu.style.display === 'block';
-            employeeMenu.style.display = isVisible ? 'none' : 'block';
-            if (!isVisible) updateEmployeeUI();
-        }
-
-        closeEmployeeMenu.onclick = () => toggleEmployeeMenu();
-        if (newHudIcon) {
-            newHudIcon.style.pointerEvents = 'auto';
-            newHudIcon.style.cursor = 'pointer';
-            newHudIcon.onclick = (e) => {
-                if (!isHudEditorActive) toggleEmployeeMenu();
-            };
-        }
+        addButtonListener(sellButton, (e) => {
+            if (isHudEditorActive || isMoving) return;
+            if (inventory.skateboards > 0) {
+                sellButton.src = "Assets/presionado.png";
+                setTimeout(() => { sellButton.src = "Assets/sin presionar.png"; }, 200);
+                isPendingSale = true;
+                moveToWaypoint(2);
+            }
+        });
 
         function updateEmployeeUI() {
             const ids = ["4", "5", "6", "0"];
@@ -2783,7 +2697,7 @@
         });
 
         // Initialize
-        window.addEventListener('load', () => {
+        function initGame() {
             updateInventoryUI();
             bootstrapAutomation();
             setTimeout(() => {
@@ -2796,15 +2710,24 @@
             const recipeModal = document.getElementById('recipe-modal');
             const closeRecipeBtn = document.getElementById('close-recipe');
 
-            closeRecipeBtn.onclick = () => {
+            function closeRecipe() {
                 recipeModal.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
                 recipeModal.style.opacity = '0';
                 recipeModal.style.transform = 'scale(1.1)';
                 setTimeout(() => {
                     recipeModal.style.display = 'none';
                 }, 500);
-            };
-        });
+            }
+
+            closeRecipeBtn.onclick = closeRecipe;
+            closeRecipeBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                closeRecipe();
+            }, { passive: false });
+        }
+
+        // Run initialization immediately as script is at the bottom
+        initGame();
     </script>
 </body>
 
